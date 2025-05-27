@@ -888,3 +888,124 @@ export class PoolStable extends PoolBase {
 
 }
 
+export const defautlCurvePT = 80n;
+export const defaultACoeff = 1105000000000n;
+export const defaultBCoeff = 7056000000n;
+export const defaultBaseUSDRate = 7000000000000000n;
+
+export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurvePT?: bigint }): Cell {
+    let expACoeff = config.expACoeff ?? defaultACoeff;
+    let expBCoeff = config.expBCoeff ?? defaultBCoeff;
+    let baseUSDRate = config.baseUSDRate ?? defaultBaseUSDRate;
+    let ctokenToCurvePT = config.ctokenToCurvePT ?? defautlCurvePT;
+    return beginCell()
+        .storeUint(1, 1)
+        .storeCoins(config.leftReserve)
+        .storeCoins(config.rightReserve)
+        .storeCoins(config.totalSupplyLP)
+        .storeCoins(config.collectedLeftJettonProtocolFees)
+        .storeCoins(config.collectedRightJettonProtocolFees)
+        .storeAddress(config.protocolFeeAddress)
+        .storeUint(config.lpFee, 16)
+        .storeUint(config.protocolFee, 16)
+        .storeUint(expACoeff, expACoeff.toString(2).length)
+        .storeUint(expBCoeff, expBCoeff.toString(2).length)
+        .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
+        .storeUint(ctokenToCurvePT, 7)
+        .storeRef(beginCell()
+            .storeAddress(config.routerAddress)
+            .storeAddress(config.leftWalletAddress)
+            .storeAddress(config.rightWalletAddress)
+            .storeRef(config.LPWalletCode)
+            .storeRef(config.LPAccountCode)
+            .endCell())
+        .endCell();
+}
+
+export function poolBciStorageParser(src: Cell) {
+    let ds = src.beginParse()
+    return {
+        isLocked: ds.loadBoolean(),
+        reserve0: ds.loadCoins(),
+        reserve1: ds.loadCoins(),
+        totalSupplyLp: ds.loadCoins(),
+        collectedToken0ProtocolFee: ds.loadCoins(),
+        collectedToken1ProtocolFee: ds.loadCoins(),
+        protocolFeeAddress: ds.loadMaybeAddress(),
+        lpFee: ds.loadUintBig(16),
+        protocolFee: ds.loadUintBig(16),
+        expACoeff: ds.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
+        expBCoeff: ds.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
+        baseUSDRate: ds.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
+        ctokenToCurveCT: ds.loadUintBig(7),
+        ...(() => {
+            let ds_p = ds.loadRef().beginParse()
+            return {
+                routerAddress: ds_p.loadAddress(),
+                token0Address: ds_p.loadAddress(),
+                token1Address: ds_p.loadAddress(),
+                lpWalletCode: cellToBocStr(ds_p.loadRef()),
+                lpAccCode: cellToBocStr(ds_p.loadRef()),
+            }
+        })(),
+
+    }
+}
+
+export class PoolBCI extends PoolBase {
+    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell; }) {
+        super(poolOpcodes, address, init)
+    }
+
+    static createFromConfig(config: PoolConfig, code: Cell, workchain = 0) {
+        return this.createFromConfigBase(config, bciPoolConfigToCell, code, workchain)
+    }
+
+    async getPoolData(provider: ContractProvider) {
+        const result = await provider.get('get_pool_data', []);
+        return {
+            isLocked: result.stack.readBoolean(),
+            routerAddress: result.stack.readAddress(),
+            totalSupplyLP: result.stack.readBigNumber(),
+            leftReserve: result.stack.readBigNumber(),
+            rightReserve: result.stack.readBigNumber(),
+            leftJettonAddress: result.stack.readAddress(),
+            rightJettonAddress: result.stack.readAddress(),
+            lpFee: result.stack.readBigNumber(),
+            protocolFee: result.stack.readBigNumber(),
+            protocolFeeAddress: result.stack.readAddressOpt(),
+            collectedLeftJettonProtocolFees: result.stack.readBigNumber(),
+            collectedRightJettonProtocolFees: result.stack.readBigNumber(),
+            coefficientA: result.stack.readBigNumber(),
+            coefficientB: result.stack.readBigNumber(),
+            baseUSDRate: result.stack.readBigNumber(),
+            tokenCurvePT: result.stack.readBigNumber(),
+        };
+    }
+
+    async getPoolDataNoFail(provider: ContractProvider) {
+        let data: AsyncReturnType<typeof this.getPoolData> = {
+            totalSupplyLP: 0n,
+            routerAddress: HOLE_ADDRESS,
+            isLocked: true,
+            leftReserve: 0n,
+            rightReserve: 0n,
+            leftJettonAddress: HOLE_ADDRESS,
+            rightJettonAddress: HOLE_ADDRESS,
+            lpFee: 0n,
+            protocolFee: 0n,
+            protocolFeeAddress: HOLE_ADDRESS as Address | null,
+            collectedLeftJettonProtocolFees: 0n,
+            collectedRightJettonProtocolFees: 0n,
+            coefficientA: defaultACoeff,
+            coefficientB: defaultBCoeff,
+            baseUSDRate: defaultBaseUSDRate,
+            tokenCurvePT: defautlCurvePT,
+        }
+        try {
+            data = await this.getPoolData(provider)
+        } catch { }
+        return data
+    }
+
+}

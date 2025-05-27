@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { compileX } from "../libs/";
 import { POOL_TYPES, preprocBuildContractsLocal } from "./helpers";
+import { defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurvePT } from "../wrappers/Pool"
 
 (async () => {
     let autocleanup = undefined;
@@ -9,13 +10,18 @@ import { POOL_TYPES, preprocBuildContractsLocal } from "./helpers";
 
     for (let tp of POOL_TYPES) {
         console.log(`Building for pool type: ${tp}`);
-        preprocBuildContractsLocal({
+        const ops = {
             dexType: tp,
             defaultProtocolFee: null,
             defaultIsLocked: null,
             defaultLPFee: null,
             autocleanup: autocleanup,
-        });
+            defaultExpACoeff: tp == "bonding_curve" ? defaultACoeff : undefined,
+            defaultExpBCoeff: tp == "bonding_curve" ? defaultBCoeff : undefined,
+            defaultBaseUSDRate: tp == "bonding_curve" ? defaultBaseUSDRate : undefined,
+            defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurvePT : undefined,
+        };
+        preprocBuildContractsLocal(ops);
 
         console.log("\tCompiling Router...");
         await compileX('Router', {

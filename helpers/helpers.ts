@@ -6,7 +6,7 @@ import path from 'path';
 import { AddressMap, AsyncReturnType, CliConfig, ElementType, HOLE_ADDRESS, StorageParser, cellToBocStr, createMdGraph, fetchJettonData, jMinterOpcodes, jWalletOpcodes, nftMinterOpcodes, nftOpcodes, parseErrors, parseOp, parseTokenAddress, parseVersion, preprocBuildContracts, resolvers, stdFtOpCodes, stdNftOpCodes, toGraphMap, toHexStr, tvmErrorCodes } from "../libs";
 import { BracketKeysType, CaptionHandler, CaptionHandlerParams, Captions, opEntries } from "../libs/src/graph";
 import { LPAccount } from "../wrappers/LPAccount";
-import { PoolBase, PoolCPI, PoolCSI, PoolCWSI, PoolStable, PoolWCPI } from "../wrappers/Pool";
+import { PoolBase, PoolCPI, PoolCSI, PoolCWSI, PoolStable, PoolWCPI, PoolBCI } from "../wrappers/Pool";
 import { routerOpcodes } from "../wrappers/Router";
 
 export function dumpRawCells(src: Record<string, Cell>, filepath: string, encoding: "hex" | "base64" = "hex") {
@@ -39,7 +39,8 @@ export const POOL_TYPES = [
     "weighted_stableswap",
     "constant_product",
     "constant_sum",
-    "stableswap"
+    "stableswap",
+    "bonding_curve",
 ] as const
 
 export const FEE_DIVIDER = 10000
@@ -74,15 +75,26 @@ export function preprocBuildContractsLocal(opts: {
     defaultLPFee: Number | null,
     defaultProtocolFee: Number | null,
     autocleanup?: boolean,
+    defaultExpACoeff?: bigint,
+    defaultExpBCoeff?: bigint,
+    defaultBaseUSDRate?: bigint,
+    defaultCTokenForCurve?: bigint
 }): void {
     process.env.DEX_TYPE = opts.dexType
     preprocBuildContracts({
         autocleanup: opts.autocleanup,
         data: {
             dexType: opts.dexType,
-            defaultIsLocked: opts.defaultIsLocked == null ? "0" : "1",
-            defaultLPFee: opts.defaultLPFee == null ? "20" : opts.defaultLPFee,
-            defaultProtocolFee: opts.defaultProtocolFee == null ? "10" : opts.defaultProtocolFee,
+            defaultIsLocked: opts.defaultIsLocked == null ? 0 : 1,
+            defaultLPFee: opts.defaultLPFee == null ? 20 : opts.defaultLPFee,
+            defaultProtocolFee: opts.defaultProtocolFee == null ? 10 : opts.defaultProtocolFee,
+            defaultExpACoeff: opts.defaultExpACoeff ?? undefined,
+            calcExpACoeffSize: opts.defaultExpACoeff ? opts.defaultExpACoeff.toString(2).length : undefined,
+            defaultExpBCoeff: opts.defaultExpBCoeff ?? undefined,
+            calcExpBCoeffSize: opts.defaultExpBCoeff ? opts.defaultExpBCoeff.toString(2).length : undefined,
+            defaultBaseUSDRate: opts.defaultBaseUSDRate ?? undefined,
+            calcBaseUSDRateSize: opts.defaultBaseUSDRate ? opts.defaultBaseUSDRate.toString(2).length : undefined,
+            defaultCTokenForCurve: opts.defaultCTokenForCurve ?? undefined,
             version: parseVersion(),
             renderRouterAdminExtCalls: fs.existsSync(`contracts/router/pools/${opts.dexType}/ext_admin.fc`),
             renderPoolExtRouterCalls: fs.existsSync(`contracts/pool/pools/${opts.dexType}/ext_router.fc`),
@@ -95,6 +107,9 @@ export async function getCastedPool(provider: NetworkProvider, pool: OpenedContr
     let dexType =  typeOverride ?? await pool.getPoolType()
     let newPool
     switch (dexType) {
+        case "bonding_curve":
+            newPool = provider.open(PoolBCI.createFromAddress(pool.address))
+            break
         case "constant_product":
             newPool = provider.open(PoolCPI.createFromAddress(pool.address))
             break

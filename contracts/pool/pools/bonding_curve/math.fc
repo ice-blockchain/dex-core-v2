@@ -1,0 +1,95 @@
+const _MAX_IN_RATIO = 300000000000000000; ;; 0.3e18
+
+const error::df_zero = 5104;
+const error::log_domain_error = 5105;
+const error::curve_mode_pt_over_100 = 5106;
+
+int _invariant(int _left_balance, int _right_balance) inline {
+    _left_balance = _left_balance.math::fp::from();
+    _right_balance = _right_balance.math::fp::from();
+    return math::fp::mul(_left_balance, _right_balance);
+}
+
+(int) _get_current_bonding_curve_price(int amount_in_fp, int s1_ct_sold_fp) inline {
+    int A_coeff = storage::exp_A_coeff;
+    int B_coeff = storage::exp_B_coeff;
+    int base_usd_rate_fp = storage::base_usd_rate;
+
+    int amount_in_usd_fp = amount_in_fp.math::fp::mul(base_usd_rate_fp);
+
+    int exp_Bs1 = math::ONE_DEC;
+
+    if (B_coeff != 0) {
+        ;; `exp_arg` = (B * s1_scaled)
+        int exp_arg = B_coeff.math::fp::mul(s1_ct_sold_fp);
+        exp_Bs1 = math::fp::exp(exp_arg); ;; Using math::fp::exp directly
+        throw_if(error::exp_result_invalid, exp_Bs1 <= 0); ;; Check for valid result
+    }
+
+    ;; term_inside_ln = (amount_in_usd * B / A) + exp_Bs1
+    int term_inside_ln_numerator = amount_in_usd_fp.math::fp::mul(B_coeff);
+
+    throw_if(error::df_zero, A_coeff == 0); ;; A should not be zero for exponential curve
+    int term_inside_ln_div_A = term_inside_ln_numerator.math::fp::div(A_coeff);
+
+    int term_inside_ln_fp = term_inside_ln_div_A + exp_Bs1;
+
+    throw_if(error::log_domain_error, term_inside_ln_fp <= 0); ;; log argument must be positive
+
+    int s2_calculated_scaled = 0;
+    if (B_coeff == 0) {
+        ;; Linear case if B is effectively zero (flat price A)
+        ;; s2 = s1 + (amount_in_usd / A)
+        s2_calculated_scaled = s1_ct_sold_fp + amount_in_usd_fp.math::fp::div(A_coeff);
+    } else {
+        ;; s2 = (1 / B) * ln(term_inside_ln)
+        int inv_B = math::ONE_DEC.math::fp::div(B_coeff); ;; 1/B
+        s2_calculated_scaled = inv_B.math::fp::mul(math::fp::ln(term_inside_ln_fp));
+    }
+
+    ;; Calculate actual amount of CT to send out: amount_out_ct = s2 - s1
+    int amount_out_ct = s2_calculated_scaled - s1_ct_sold_fp;
+
+    ;; Ensure amount_out_ct is not negative (can happen due to precision or if s2 < s1 after capping)
+    if (amount_out_ct < 0) {
+        amount_out_ct = 0;
+    }
+
+    return amount_out_ct;
+}
+
+int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline {
+    ;; https:;;github.com/balancer/balancer-v2-monorepo/blob/master/pkg/pool-weighted/contracts/WeightedMath.sol
+
+    if (storage::pool_mode == 0) {
+        if (storage::ct_for_curve_phase == 0) {
+            int ct_for_curve_phase_pt = storage::ct_for_curve_phase_pt;
+            throw_if(error::df_zero, ct_for_curve_phase_pt == 0);
+            throw_if(error::curve_mode_pt_over_100, ct_for_curve_phase_pt > 100);
+            storage::ct_for_curve_phase = muldiv(storage::reserve0, ct_for_curve_phase_pt, 100);
+        }
+        if (_balance_in >= storage::ct_for_curve_phase) {
+            storage::pool_mode = 1; ;; normal mode, pool doesn't return to curve mode again
+        }
+    }
+
+    ;; add decimals
+    _balance_in = _balance_in.math::fp::from();
+    _amount_in = _amount_in.math::fp::from();
+
+    if (storage::pool_mode == 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
+        int base_out = _get_current_bonding_curve_price(_amount_in, _balance_in);
+        ;; result without decimals
+        return base_out.math::fp::to();
+    } else {
+
+        throw_unless(error::max_in_ratio, _amount_in <= _balance_in.math::fp::mul(_MAX_IN_RATIO));
+
+        int denominator = _balance_in + _amount_in;
+        int base = _balance_in.math::fp::div_up(denominator);
+
+        _balance_out = _balance_out.math::fp::from();
+        ;; result without decimals
+        return _balance_out.math::fp::mul(base.math::fp::complement()).math::fp::to();
+    }
+}

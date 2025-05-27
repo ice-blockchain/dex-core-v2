@@ -1,0 +1,54 @@
+global int storage::pool_mode;
+global int storage::ct_for_curve_phase;
+global int storage::exp_A_coeff;
+global int storage::exp_B_coeff;
+global int storage::base_usd_rate;
+global int storage::ct_for_curve_phase_pt;
+
+() storage::load() impure inline {
+    slice ds = get_data().begin_parse();
+    storage::is_locked = ds~load_bool();
+    storage::reserve0 = ds~load_coins();
+    storage::reserve1 = ds~load_coins();
+    storage::total_supply_lp = ds~load_coins();
+    storage::collected_token0_protocol_fee = ds~load_coins();
+    storage::collected_token1_protocol_fee = ds~load_coins();
+    storage::protocol_fee_address = ds~load_msg_addr();
+    storage::lp_fee = ds~load_uint(16);
+    storage::protocol_fee = ds~load_uint(16);
+    storage::exp_A_coeff = ds~load_uint(<%= calcExpACoeffSize %>);
+    storage::exp_B_coeff = ds~load_uint(<%= calcExpBCoeffSize %>);
+    storage::base_usd_rate = ds~load_uint(<%= calcBaseUSDRateSize %>);
+    storage::ct_for_curve_phase_pt = ds~load_uint(7);
+
+    storage::_static = ds~load_ref();
+    slice static_data = storage::_static.begin_parse();
+    storage::router_address = static_data~load_msg_addr();
+    storage::token0_address = static_data~load_msg_addr();
+    storage::token1_address = static_data~load_msg_addr();
+    storage::jetton_lp_wallet_code = static_data~load_ref();
+    storage::lp_account_code = static_data~load_ref();
+
+    static_data.end_parse();
+    ds.end_parse();
+}
+
+() storage::save() impure inline {
+    set_data(begin_cell()
+        .store_bool(storage::is_locked)
+        .store_coins(storage::reserve0)
+        .store_coins(storage::reserve1)
+        .store_coins(storage::total_supply_lp)
+        .store_coins(storage::collected_token0_protocol_fee)
+        .store_coins(storage::collected_token1_protocol_fee)
+        .store_slice(storage::protocol_fee_address)
+        .store_uint(storage::lp_fee, 16)
+        .store_uint(storage::protocol_fee, 16)
+        .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
+        .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
+        .store_uint(storage::base_usd_rate, <%= calcBaseUSDRateSize %>)
+        .store_uint(storage::ct_for_curve_phase_pt, 7)
+        .store_ref(storage::_static)
+    .end_cell());
+}
+

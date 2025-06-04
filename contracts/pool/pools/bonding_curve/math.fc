@@ -1,16 +1,17 @@
 const _MAX_IN_RATIO = 300000000000000000; ;; 0.3e18
+const ONE_GRAM = 1000000000;
 
 const error::df_zero = 5104;
 const error::log_domain_error = 5105;
 const error::curve_mode_pt_over_100 = 5106;
 
-int _invariant(int _left_balance, int _right_balance) inline {
+int _invariant(int _left_balance, int _right_balance) impure inline {
     _left_balance = _left_balance.math::fp::from();
     _right_balance = _right_balance.math::fp::from();
     return math::fp::mul(_left_balance, _right_balance);
 }
 
-(int) _get_current_bonding_curve_price(int amount_in_fp, int s1_ct_sold_fp) inline {
+(int) _get_current_bonding_curve_price(int amount_in_fp, int s1_ct_sold_fp) impure inline {
     int A_coeff = storage::exp_A_coeff;
     int B_coeff = storage::exp_B_coeff;
     int base_usd_rate_fp = storage::base_usd_rate;
@@ -59,29 +60,29 @@ int _invariant(int _left_balance, int _right_balance) inline {
 }
 
 int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline {
-    ;; https:;;github.com/balancer/balancer-v2-monorepo/blob/master/pkg/pool-weighted/contracts/WeightedMath.sol
 
-    if (storage::pool_mode == 0) {
-        if (storage::ct_for_curve_phase == 0) {
-            int ct_for_curve_phase_pt = storage::ct_for_curve_phase_pt;
-            throw_if(error::df_zero, ct_for_curve_phase_pt == 0);
-            throw_if(error::curve_mode_pt_over_100, ct_for_curve_phase_pt > 100);
-            storage::ct_for_curve_phase = muldiv(storage::reserve0, ct_for_curve_phase_pt, 100);
-        }
-        if (_balance_in >= storage::ct_for_curve_phase) {
-            storage::pool_mode = 1; ;; normal mode, pool doesn't return to curve mode again
-        }
-    }
+    if (storage::ct_for_curve_phase_pt > 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
 
-    ;; add decimals
-    _balance_in = _balance_in.math::fp::from();
-    _amount_in = _amount_in.math::fp::from();
+        ;; add decimals NOTE _balance_in and _amount_in are in GRAMS
+        _balance_in = _balance_in * ONE_GRAM;
+        _amount_in = _amount_in * ONE_GRAM;
 
-    if (storage::pool_mode == 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
         int base_out = _get_current_bonding_curve_price(_amount_in, _balance_in);
+        int numerator = base_out * 100;
+        _balance_out = _balance_out * ONE_GRAM;
+        int current_pt = (numerator + _balance_out - 1) / _balance_out;
+        int ct_for_curve_phase_pt = storage::ct_for_curve_phase_pt - current_pt;
+        if (ct_for_curve_phase_pt < 0) {
+            ct_for_curve_phase_pt = 0;
+        }
+        storage::ct_for_curve_phase_pt = ct_for_curve_phase_pt;
         ;; result without decimals
-        return base_out.math::fp::to();
+        return base_out / ONE_GRAM;
     } else {
+
+        ;; add decimals
+        _balance_in = _balance_in.math::fp::from();
+        _amount_in = _amount_in.math::fp::from();
 
         throw_unless(error::max_in_ratio, _amount_in <= _balance_in.math::fp::mul(_MAX_IN_RATIO));
 

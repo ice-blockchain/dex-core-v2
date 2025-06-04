@@ -6,7 +6,8 @@ const error::add_liquidity_in_curve_mode = 5108;
     int protocol_fee_out = 0;
     int ref_fee_out = 0;
 
-    throw_unless(error::reverse_swap_in_curve_mode, storage::pool_mode | _side);
+    ;; disabled for now it needs new storage parameter to indicate allowed swap side
+    ;; throw_unless(error::reverse_swap_in_curve_mode, storage::ct_for_curve_phase_pt != 0);
 
     ;; LP fee paid in in_token
     int base_in_without_fee = muldiv(_amount_in, (params::fee_divider - storage::lp_fee), params::fee_divider);
@@ -31,9 +32,10 @@ const error::add_liquidity_in_curve_mode = 5108;
     return math::fp::to(inv0);
 }
 
-(int, int, int) pool::get_lp_provide_out(int _left_amount, int _right_amount) inline {
+(int, int, int) pool::get_lp_provide_out(int _left_amount, int _right_amount) impure inline {
 
-    throw_if(error::add_liquidity_in_curve_mode, storage::pool_mode == 0);
+    ;; disabled for now that's not the right place
+    ;; throw_if(error::add_liquidity_in_curve_mode, storage::ct_for_curve_phase_pt != 0);
 
     int inv0 = _invariant(storage::reserve0, storage::reserve1);
 
@@ -63,7 +65,7 @@ const error::add_liquidity_in_curve_mode = 5108;
     return (muldiv((inv2 - inv0), storage::total_supply_lp, inv0), protocol_fee0, protocol_fee1);
 }
 
-(int, int) pool::get_lp_burn_out(int _lp_amount) inline {
+(int, int) pool::get_lp_burn_out(int _lp_amount) impure inline {
     ;; get shares
     return (
         muldiv(_lp_amount, storage::reserve0, storage::total_supply_lp),

@@ -1,5 +1,3 @@
-global int storage::pool_mode;
-global int storage::ct_for_curve_phase;
 global int storage::exp_A_coeff;
 global int storage::exp_B_coeff;
 global int storage::base_usd_rate;

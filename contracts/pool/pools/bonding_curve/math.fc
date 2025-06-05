@@ -63,13 +63,12 @@ int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline 
 
     if (storage::ct_for_curve_phase_pt > 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
 
-        ;; add decimals NOTE _balance_in and _amount_in are in GRAMS
-        _balance_in = _balance_in * ONE_GRAM;
+        ;; add decimals NOTE _balance_out and _amount_in are in GRAMS
+        _balance_out = _balance_out * ONE_GRAM;
         _amount_in = _amount_in * ONE_GRAM;
 
-        int base_out = _get_current_bonding_curve_price(_amount_in, _balance_in);
+        int base_out = _get_current_bonding_curve_price(_amount_in, _balance_out);
         int numerator = base_out * 100;
-        _balance_out = _balance_out * ONE_GRAM;
         int current_pt = (numerator + _balance_out - 1) / _balance_out;
         int ct_for_curve_phase_pt = storage::ct_for_curve_phase_pt - current_pt;
         if (ct_for_curve_phase_pt < 0) {

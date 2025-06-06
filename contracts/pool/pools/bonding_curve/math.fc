@@ -16,42 +16,34 @@ int _invariant(int _left_balance, int _right_balance) impure inline {
     int B_coeff = storage::exp_B_coeff;
     int base_usd_rate_fp = storage::base_usd_rate;
 
+    throw_if(error::df_zero, A_coeff == 0); ;; A should not be zero for the curve
+
     int amount_in_usd_fp = amount_in_fp.math::fp::mul(base_usd_rate_fp);
 
-    int exp_Bs1 = math::ONE_DEC;
+    if (B_coeff <= 0) {
+        ;; Linear case if B is effectively zero (flat price A)
+        return amount_in_usd_fp.math::fp::div(A_coeff);
+    }
 
-    if (B_coeff != 0) {
-        ;; `exp_arg` = (B * s1_scaled)
-        int exp_arg = B_coeff.math::fp::mul(s1_ct_sold_fp);
-        exp_Bs1 = math::fp::exp(exp_arg); ;; Using math::fp::exp directly
-        throw_if(error::exp_result_invalid, exp_Bs1 <= 0); ;; Check for valid result
+    int exp_arg = B_coeff.math::fp::mul(s1_ct_sold_fp);
+    int exp_Bs1 = math::fp::exp(exp_arg);
+    if (exp_Bs1 <= 0) { ;; switch to linear case
+        return amount_in_usd_fp.math::fp::div(A_coeff);
     }
 
     ;; term_inside_ln = (amount_in_usd * B / A) + exp_Bs1
     int term_inside_ln_numerator = amount_in_usd_fp.math::fp::mul(B_coeff);
-
-    throw_if(error::df_zero, A_coeff == 0); ;; A should not be zero for exponential curve
     int term_inside_ln_div_A = term_inside_ln_numerator.math::fp::div(A_coeff);
-
     int term_inside_ln_fp = term_inside_ln_div_A + exp_Bs1;
 
     throw_if(error::log_domain_error, term_inside_ln_fp <= 0); ;; log argument must be positive
 
-    int s2_calculated_scaled = 0;
-    if (B_coeff == 0) {
-        ;; Linear case if B is effectively zero (flat price A)
-        ;; s2 = s1 + (amount_in_usd / A)
-        s2_calculated_scaled = s1_ct_sold_fp + amount_in_usd_fp.math::fp::div(A_coeff);
-    } else {
-        ;; s2 = (1 / B) * ln(term_inside_ln)
-        int inv_B = math::ONE_DEC.math::fp::div(B_coeff); ;; 1/B
-        s2_calculated_scaled = inv_B.math::fp::mul(math::fp::ln(term_inside_ln_fp));
-    }
+    ;; s2 = (1 / B) * ln(term_inside_ln)
+    int inv_B = math::ONE_DEC.math::fp::div(B_coeff); ;; 1/B
+    int s2_calculated_scaled = inv_B.math::fp::mul(math::fp::ln(term_inside_ln_fp));
 
     ;; Calculate actual amount of CT to send out: amount_out_ct = s2 - s1
     int amount_out_ct = s2_calculated_scaled - s1_ct_sold_fp;
-
-    ;; Ensure amount_out_ct is not negative (can happen due to precision or if s2 < s1 after capping)
     if (amount_out_ct < 0) {
         amount_out_ct = 0;
     }
@@ -62,6 +54,7 @@ int _invariant(int _left_balance, int _right_balance) impure inline {
 int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline {
 
     if (storage::ct_for_curve_phase_pt > 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
+        throw_if(error::curve_mode_pt_over_100, storage::ct_for_curve_phase_pt > 100);
 
         ;; add decimals NOTE _balance_out and _amount_in are in GRAMS
         _balance_out = _balance_out * ONE_GRAM;

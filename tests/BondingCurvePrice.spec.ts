@@ -1,5 +1,5 @@
 import { compile } from '@ton/blueprint';
-import { Address, Cell, toNano } from '@ton/core';
+import { Address, Cell, toNano, fromNano } from '@ton/core';
 import { Blockchain, SandboxContract, SendMessageResult, TreasuryContract } from '@ton/sandbox';
 import '@ton/test-utils';
 import 'dotenv/config';
@@ -212,112 +212,63 @@ type CrossRouterSwapParams = {
 
 const HOUR_IN_SECONDS = 3600;
 
-// --- Constants and Helpers for Fixed-Point Arithmetic ---
-const CT_DECIMALS = toNano(1); // 10^9
-const ICE_DECIMALS = toNano(1); // 10^9 (Assuming ICE is also a jetton with 9 decimals)
-
-// Helper for muldiv: (a * b) / c
-const muldiv = (a: bigint, b: bigint, c: bigint): bigint => {
-    if (c === 0n) throw new Error("muldiv: division by zero");
-    return (a * b) / c;
-};
-
-// Simplified fixed-point math operations for BigInt, assuming ONE_DEC scaling
-// In a real scenario, you'd use a dedicated fixed-point library or BigInt operations directly
-// here we replicate the funcbox math::fp functions approximately.
-const fp_mul = (a: bigint, b: bigint): bigint => (a * b) / ONE_DEC;
-const fp_div = (a: bigint, b: bigint): bigint => (a * ONE_DEC) / b;
-const fp_add = (a: bigint, b: bigint): bigint => a + b;
-const fp_sub = (a: bigint, b: bigint): bigint => a - b;
-
-// These are simplified approximations for testing purposes.
-// In a real environment, you would use actual BigInt-based implementations
-// that handle precision and potential overflows more robustly.
-// For testing the bonding curve, we'll use Math.log and Math.exp on numbers,
-// then scale them back to BigInt. This can introduce slight inaccuracies but
-// should be sufficient for general test assertions.
-const fp_log = (x: bigint): bigint => {
-    if (x <= 0n) throw new Error("Log domain error: x must be positive");
-    return BigInt(Math.floor(Math.log(Number(x) / Number(ONE_DEC)) * Number(ONE_DEC)));
-};
-const fp_exp = (x: bigint): bigint => {
-    const val = BigInt(Math.floor(Math.exp(Number(x) / Number(ONE_DEC)) * Number(ONE_DEC)));
-    if (val <= 0n) throw new Error("Exp result invalid: must be positive");
-    return val;
-};
-
 const calculateExpectedCTOut = (
-    amount_in_ice_native: bigint,
-    s1_ct_sold_native: bigint,
-    coefficientA: bigint, // ONE_DEC scaled
-    coefficientB: bigint, // ONE_DEC scaled
-    baseUSDRate: bigint, // ONE_DEC scaled
-    tokenCurvePT: bigint, // Percentage (0-100)
-    initial_ct_reserve: bigint // Native CT decimals
-): bigint => {
-    if (coefficientA === 0n) throw new Error("price_is_zero: coefficientA cannot be zero");
+    amountIn: number,
+    creatorTokensSold: number,
+    baseUSDRate: number,
+): number => {
+    const amount_in_usd_fp = amountIn * baseUSDRate;
 
-    // Calculate the absolute CT threshold based on the percentage
-    const ct_threshold_native = muldiv(initial_ct_reserve, tokenCurvePT, 100n);
+    const a_coeff = 1.105 * 10**-6;
+    const b_coeff = 7.056 * 10**-9;
 
-    if (s1_ct_sold_native >= ct_threshold_native) {
-        return 0n;
-    }
+    const exp_arg = b_coeff * creatorTokensSold;
+    const exp_Bs1 = Math.exp(exp_arg);
 
-    // Step 1: Convert amount_in_ice (native decimals) to USD (ONE_DEC fixed-point scale)
-    const amount_in_usd_fp = muldiv(amount_in_ice_native, baseUSDRate, ICE_DECIMALS);
+    const term_inside_ln_numerator = amount_in_usd_fp * b_coeff;
+    const term_inside_ln_div_A = term_inside_ln_numerator / a_coeff;
 
-    // Step 2: Prepare s1_ct_sold for the exponential calculation (scale to ONE_DEC)
-    const s1_ct_sold_fp_for_exp_arg = muldiv(s1_ct_sold_native, ONE_DEC, CT_DECIMALS);
+    const term_inside_ln_fp = term_inside_ln_div_A + exp_Bs1;
+    const s2_calculated_scaled = (1 / b_coeff) * Math.log(term_inside_ln_fp);
 
-    // Step 3: Calculate exp_Bs1 (e^(B*s1))
-    let exp_Bs1: bigint;
-    if (coefficientB === 0n) {
-        exp_Bs1 = ONE_DEC; // Fixed-point 1.0
-    } else {
-        const exp_arg = fp_mul(coefficientB, s1_ct_sold_fp_for_exp_arg);
-        exp_Bs1 = fp_exp(exp_arg);
-    }
+    let amount_out_ct = s2_calculated_scaled - creatorTokensSold;
 
-    // Step 4: Calculate the term inside ln for the integral formula
-    const term_inside_ln_numerator = fp_mul(amount_in_usd_fp, coefficientB);
-    const term_inside_ln_div_A = fp_div(term_inside_ln_numerator, coefficientA);
-    const term_inside_ln_fp = fp_add(term_inside_ln_div_A, exp_Bs1);
+    if (amount_out_ct < 0)
+        amount_out_ct = 0;
 
-    if (term_inside_ln_fp <= 0n) throw new Error("log_domain_error: Argument to log must be positive");
-
-    // Step 5: Calculate s2 (new amount of CT sold) based on the integral formula
-    let s2_calculated_fp_for_exp_arg: bigint;
-    if (coefficientB === 0n) {
-        // Linear case: price is A_float.
-        // amount_out_ct_native = (amount_in_usd_fp * CT_DECIMALS) / coefficientA
-        const amount_out_ct_native_linear = muldiv(amount_in_usd_fp, CT_DECIMALS, coefficientA);
-        return amount_out_ct_native_linear;
-    } else {
-        const inv_B_fp = fp_div(ONE_DEC, coefficientB); // 1/B_fp, which is (1/B_float) * ONE_DEC
-        s2_calculated_fp_for_exp_arg = fp_mul(inv_B_fp, fp_log(term_inside_ln_fp));
-    }
-
-    // Step 6: Convert s2 back to native CT token decimals
-    const s2_calculated_native = muldiv(s2_calculated_fp_for_exp_arg, CT_DECIMALS, ONE_DEC);
-
-    // Step 7: Apply allocation limit and calculate final amount_out_ct
-    let amount_out_ct_native = s2_calculated_native - s1_ct_sold_native;
-
-    // Ensure result is not negative (due to precision errors or if s2 < s1 after capping)
-    if (amount_out_ct_native < 0n) {
-        amount_out_ct_native = 0n;
-    }
-
-    // Apply ct_threshold_native limit
-    const remaining_ct_allocation = ct_threshold_native - s1_ct_sold_native;
-    if (amount_out_ct_native > remaining_ct_allocation) {
-        amount_out_ct_native = remaining_ct_allocation;
-    }
-
-    return amount_out_ct_native;
+    return amount_out_ct;
 };
+/*
+const calculateExpectedCTOutBigint(amount_in: bigint, s1_ct_sold_fp: bigint): number => {
 
+    const defaultACoeff = 1105000000000n;
+    const B_coeff = 7056000000n;
+    const defaultBaseUSDRate = 7000000000000000n;
+
+    amount_in = amount_in * 10**9;
+    s1_ct_sold_fp = s1_ct_sold_fp * 10**9;
+
+    int amount_in_usd_fp = amount_in_fp * base_usd_rate_fp / 10**18;
+
+    const exp_arg = B_coeff * s1_ct_sold_fp / 10**18;
+    int exp_Bs1 = math::fp::exp(exp_arg);
+
+    int term_inside_ln_numerator = amount_in_usd_fp.math::fp::mul(B_coeff);
+    int term_inside_ln_div_A = term_inside_ln_numerator.math::fp::div(A_coeff);
+    int term_inside_ln_fp = term_inside_ln_div_A + exp_Bs1;
+
+    int inv_B = math::ONE_DEC.math::fp::div(B_coeff);
+    int s2_calculated_scaled = inv_B.math::fp::mul(math::fp::ln(term_inside_ln_fp));
+
+    int amount_out_ct = s2_calculated_scaled - s1_ct_sold_fp;
+
+    if (amount_out_ct < 0) {
+        amount_out_ct = 0;
+    }
+
+    return amount_out_ct;
+};
+*/
 describe('Bonding Curve Price swap', () => {
     let deployJetton: (params: DeployJettonParams) => Promise<SBCtrJettonMinter>,
         mintTokens: (params: MintParams) => Promise<void>,
@@ -1283,37 +1234,39 @@ describe('Bonding Curve Price swap', () => {
             const baseUSDRate = data.baseUSDRate;
             const tokenCurvePT = data.tokenCurvePT;
 
-            const expectedCtOut = calculateExpectedCTOut(
-                amountInToken2,
-                data.rightReserve,
-                coefficientA, // Use new name
-                coefficientB, // Use new name
-                baseUSDRate, // Use new name
-                tokenCurvePT, // Use new name
-                toNano(1000000) // Pass initial reserve
-            );
+            const amountIn = (amountInToken2 * BigInt(10000 - 20)) / BigInt(10000);
+            const calcultedOut = Number(toNano(calculateExpectedCTOut(
+                Number(fromNano(amountIn)),
+                Number(fromNano(data.leftReserve)),
+                0.007,
+            )));
+
+            const expectedOut = calcultedOut - (calcultedOut * 10 / 10000);
+
+            const senderToken1Wallet = await getWalletContract(bc, setup.token1, alice.address);
+            const senderToken1BalanceBefore = await getWalletBalance(senderToken1Wallet);
 
             // Perform the swap (Token2 for Token1)
             const swapResult = await swap({
                 sender: alice,
                 router: setup.router,
-                tokenIn: setup.token2, // ICE
-                tokenOut: setup.token1, // CT
+                tokenIn: setup.token2,
+                tokenOut: setup.token1,
                 amountIn: amountInToken2,
                 minAmountOut: 1n, // Minimal amount to receive
             });
 
-            const senderToken1Wallet = await getWalletContract(bc, setup.token1, alice.address);
             const senderToken1BalanceAfter = await getWalletBalance(senderToken1Wallet);
+            const receivedTokens = senderToken1BalanceAfter - senderToken1BalanceBefore;
 
             // Verify the received amount is close to the expected amount
             // Allow for a small deviation due to fixed-point precision differences between TS and FunC
-            const tolerance = 0.001; // 0.1% tolerance
-            const lowerBound = expectedCtOut - muldiv(expectedCtOut, BigInt(Math.floor(tolerance * Number(ONE_DEC))), ONE_DEC);
-            const upperBound = expectedCtOut + muldiv(expectedCtOut, BigInt(Math.floor(tolerance * Number(ONE_DEC))), ONE_DEC);
+            const tolerance = expectedOut * 10**-9 * 0.001;
+            const lowerOutLimit = expectedOut - tolerance;
+            const upperOutLimit = expectedOut + tolerance;
 
-            expect(senderToken1BalanceAfter).toBeGreaterThanOrEqual(lowerBound);
-            expect(senderToken1BalanceAfter).toBeLessThanOrEqual(upperBound);
+            expect(receivedTokens).toBeGreaterThanOrEqual(lowerOutLimit);
+            expect(receivedTokens).toBeLessThanOrEqual(upperOutLimit);
         });
     });
 

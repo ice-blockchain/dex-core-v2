@@ -14,10 +14,10 @@
         .store_uint(<%= defaultExpACoeff %>, <%= calcExpACoeffSize %>)
         .store_uint(<%= defaultExpBCoeff %>, <%= calcExpBCoeffSize %>)
         .store_uint(<%= defaultBaseUSDRate %>, <%= calcBaseUSDRateSize %>)
-        .store_uint(<%= defaultCTokenForCurve %>, 7)
-    equivalent to <b <%= defaultIsLocked %> 1 u, 0 Gram, 0 Gram, 0 Gram, 0 Gram, 0 Gram, b{00} s, <%= defaultLPFee %> 16 u, <%= defaultProtocolFee %> 16 u, <%= defaultExpACoeff %> <%= calcExpACoeffSize %> u, <%= defaultExpBCoeff %> <%= calcExpBCoeffSize %> u, <%= defaultBaseUSDRate %> <%= calcBaseUSDRateSize %> u, <%= defaultCTokenForCurve %> 7 u, b> <s PUSHSLICE
+        .store_coins(<%= defaultCTokenForCurve %>)
+    equivalent to <b <%= defaultIsLocked %> 1 u, 0 Gram, 0 Gram, 0 Gram, 0 Gram, 0 Gram, b{00} s, <%= defaultLPFee %> 16 u, <%= defaultProtocolFee %> 16 u, <%= defaultExpACoeff %> <%= calcExpACoeffSize %> u, <%= defaultExpBCoeff %> <%= calcExpBCoeffSize %> u, <%= defaultBaseUSDRate %> <%= calcBaseUSDRateSize %> u, <%= defaultCTokenForCurve %> Gram, b> <s PUSHSLICE
 -}
-(slice) _pool_idata() inline asm "<b <%= defaultIsLocked %> 1 u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, b{00} s, <%= defaultLPFee %> 16 u, <%= defaultProtocolFee %> 16 u, <%= defaultExpACoeff %> <%= calcExpACoeffSize %> u, <%= defaultExpBCoeff %> <%= calcExpBCoeffSize %> u, <%= defaultBaseUSDRate %> <%= calcBaseUSDRateSize %> u, <%= defaultCTokenForCurve %> 7 u, b> <s PUSHSLICE";
+(slice) _pool_idata() inline asm "<b <%= defaultIsLocked %> 1 u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, 0 -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, b{00} s, <%= defaultLPFee %> 16 u, <%= defaultProtocolFee %> 16 u, <%= defaultExpACoeff %> <%= calcExpACoeffSize %> u, <%= defaultExpBCoeff %> <%= calcExpBCoeffSize %> u, <%= defaultBaseUSDRate %> <%= calcBaseUSDRateSize %> u, <%= defaultCTokenForCurve %> -1 { 1+ 2dup 8 * ufits } until rot over 4 u, -rot 8 * u, b> <s PUSHSLICE";
 
 (cell) pool_idata(slice _router_address, slice _first_jetton_address, slice _second_jetton_address, cell _jetton_lp_wallet_code, cell _lp_account_code) inline {    
     var _pool_2_data = begin_cell()

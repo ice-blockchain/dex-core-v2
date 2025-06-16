@@ -3,7 +3,6 @@ const ONE_GRAM = 1000000000;
 
 const error::df_zero = 5104;
 const error::log_domain_error = 5105;
-const error::curve_mode_pt_over_100 = 5106;
 
 int _invariant(int _left_balance, int _right_balance) impure inline {
     _left_balance = _left_balance.math::fp::from();
@@ -53,21 +52,20 @@ int _invariant(int _left_balance, int _right_balance) impure inline {
 
 int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline {
 
-    if (storage::ct_for_curve_phase_pt > 0) { ;; === Bonding Curve Phase (CT/ION sale) ===
-        throw_if(error::curve_mode_pt_over_100, storage::ct_for_curve_phase_pt > 100);
+    if (storage::ct_for_curve_phase > 0) { ;; === Bonding Curve Phase ===
+        if (storage::ct_for_curve_phase < 100) {
+            storage::ct_for_curve_phase = _balance_out - (storage::ct_for_curve_phase * _balance_out / 100);
+        }
 
         ;; add decimals NOTE _balance_out and _amount_in are in GRAMS
         _balance_out = _balance_out * ONE_GRAM;
         _amount_in = _amount_in * ONE_GRAM;
+        int ct_for_curve_phase = storage::ct_for_curve_phase * ONE_GRAM;
 
         int base_out = _get_current_bonding_curve_price(_amount_in, _balance_out);
-        int numerator = base_out * 100;
-        int current_pt = (numerator + _balance_out - 1) / _balance_out;
-        int ct_for_curve_phase_pt = storage::ct_for_curve_phase_pt - current_pt;
-        if (ct_for_curve_phase_pt < 0) {
-            ct_for_curve_phase_pt = 0;
+        if (ct_for_curve_phase >= _balance_out - base_out) {
+            storage::ct_for_curve_phase = 0;
         }
-        storage::ct_for_curve_phase_pt = ct_for_curve_phase_pt;
         ;; result without decimals
         return base_out / ONE_GRAM;
     } else {

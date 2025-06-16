@@ -12,6 +12,7 @@ const error::fee_out_range = 94;
 const error::invalid_token = 95;
 const error::empty_not_allowed = 96;
 const error::max_in_ratio = 97;
+const error::add_liquidity_in_curve_mode = 98;
 const error::empty_cell = 99;
 
 const error::wrong_op = 0xFFFF;

@@ -1,5 +1,5 @@
 import { compile } from '@ton/blueprint';
-import { Address, Cell, toNano, fromNano } from '@ton/core';
+import { Address, beginCell, Cell, toNano, fromNano } from '@ton/core';
 import { Blockchain, SandboxContract, SendMessageResult, TreasuryContract } from '@ton/sandbox';
 import '@ton/test-utils';
 import 'dotenv/config';
@@ -9,7 +9,7 @@ import { BracketKeysType, BracketType, StorageParser } from '../libs/src/graph';
 import { expectBounced, expectEqAddress, expectNotBounced, getWalletContract, SLIM_CONFIG_LEGACY } from '../libs/src/test-helpers';
 import { LPAccount, lpAccStorageParser } from '../wrappers/LPAccount';
 import { LPWallet, lpWalletStorageParser } from '../wrappers/LPWallet';
-import { PoolBCI as Pool, poolBciStorageParser, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurvePT } from '../wrappers/Pool';
+import { PoolBCI as Pool, poolBciStorageParser, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from '../wrappers/Pool';
 import { Router, crossSwapPayload, provideLpPayload, routerStorageParser, swapPayload } from '../wrappers/Router';
 import { Vault, vaultStorageParser } from '../wrappers/Vault';
 
@@ -61,6 +61,8 @@ type SetupResult = {
     router: SBCtrRouter,
     token1: SBCtrJettonMinter,
     token2: SBCtrJettonMinter,
+    name1: string,
+    name2: string,
     pool?: SBCtrPool;
 };
 
@@ -238,37 +240,7 @@ const calculateExpectedCTOut = (
 
     return amount_out_ct;
 };
-/*
-const calculateExpectedCTOutBigint(amount_in: bigint, s1_ct_sold_fp: bigint): number => {
 
-    const defaultACoeff = 1105000000000n;
-    const B_coeff = 7056000000n;
-    const defaultBaseUSDRate = 7000000000000000n;
-
-    amount_in = amount_in * 10**9;
-    s1_ct_sold_fp = s1_ct_sold_fp * 10**9;
-
-    int amount_in_usd_fp = amount_in_fp * base_usd_rate_fp / 10**18;
-
-    const exp_arg = B_coeff * s1_ct_sold_fp / 10**18;
-    int exp_Bs1 = math::fp::exp(exp_arg);
-
-    int term_inside_ln_numerator = amount_in_usd_fp.math::fp::mul(B_coeff);
-    int term_inside_ln_div_A = term_inside_ln_numerator.math::fp::div(A_coeff);
-    int term_inside_ln_fp = term_inside_ln_div_A + exp_Bs1;
-
-    int inv_B = math::ONE_DEC.math::fp::div(B_coeff);
-    int s2_calculated_scaled = inv_B.math::fp::mul(math::fp::ln(term_inside_ln_fp));
-
-    int amount_out_ct = s2_calculated_scaled - s1_ct_sold_fp;
-
-    if (amount_out_ct < 0) {
-        amount_out_ct = 0;
-    }
-
-    return amount_out_ct;
-};
-*/
 describe('Bonding Curve Price swap', () => {
     let deployJetton: (params: DeployJettonParams) => Promise<SBCtrJettonMinter>,
         mintTokens: (params: MintParams) => Promise<void>,
@@ -312,7 +284,7 @@ describe('Bonding Curve Price swap', () => {
             defaultExpACoeff: defaultACoeff,
             defaultExpBCoeff: defaultBCoeff,
             defaultBaseUSDRate: defaultBaseUSDRate,
-            defaultCTokenForCurve: defautlCurvePT,
+            defaultCTokenForCurve: defautlCurveT,
         });
 
         const _code = {
@@ -672,13 +644,16 @@ describe('Bonding Curve Price swap', () => {
             bracketMap.set(router, "diamond");
             storageMap.set(router, routerStorageParser);
 
+            const name1 = params.createPool?.name1 ?? "Token1";
+            const name2 = params.createPool?.name2 ?? "Token2";
+
             let jetton1 = await deployJetton({
-                name: params.createPool?.name1 ?? "Token1",
+                name: name1,
                 router: router,
                 mintAmount: params.mintAmount
             });
             let jetton2 = await deployJetton({
-                name: params.createPool?.name2 ?? "Token2",
+                name: name2,
                 router: router,
                 mintAmount: params.mintAmount
             });
@@ -696,6 +671,8 @@ describe('Bonding Curve Price swap', () => {
                 router: router,
                 token1: jetton1,
                 token2: jetton2,
+                name1: name1,
+                name2: name2,
                 pool: pool
             };
         };
@@ -1213,10 +1190,18 @@ describe('Bonding Curve Price swap', () => {
         bracketMap.set(deployer, "circle");
         bracketMap.set(alice, "circle");
         bracketMap.set(bob, "circle");
-
     });
 
     describe('Swap Price and Reserve-Based Restrictions', () => {
+        async function addressIsBigger(jetton1: SBCtrJettonMinter, jetton2: SBCtrJettonMinter, router: Address) {
+            let routerWallet1 = await getWalletContract(bc, jetton1, router);
+            let routerWallet2 = await getWalletContract(bc, jetton2, router);
+            const routerWallet1Hash = beginCell().storeAddress(routerWallet1.address).endCell().hash();
+            const routerWallet2Hash = beginCell().storeAddress(routerWallet2.address).endCell().hash();
+            const routerWallet1HashInt = BigInt('0x' + Buffer.from(routerWallet1Hash).toString('hex'));
+            const routerWallet2HashInt = BigInt('0x' + Buffer.from(routerWallet2Hash).toString('hex'));
+            return routerWallet1HashInt > routerWallet2HashInt;
+        }
         it('should swap token2 for token1 and verify price', async () => {
             let setup = await setupDex({
                 createPool: {
@@ -1225,39 +1210,40 @@ describe('Bonding Curve Price swap', () => {
                 }
             });
 
-            let data = await (setup.pool as SBCtrPool).getPoolData();
-            const amountInToken2 = toNano(10); // Amount of ICE (Token2) to swap
+            let poolData = await (setup.pool as SBCtrPool).getPoolData();
+            const amountInToken1 = toNano(10);
 
-            // Updated property names
-            const coefficientA = data.coefficientA;
-            const coefficientB = data.coefficientB;
-            const baseUSDRate = data.baseUSDRate;
-            const tokenCurvePT = data.tokenCurvePT;
+            let reserveOut;
+            if (await addressIsBigger(setup.token1, setup.token2, setup.router.address)) {
+                reserveOut = poolData.rightReserve;
+            } else {
+                reserveOut = poolData.leftReserve;
+            }
 
-            const amountIn = (amountInToken2 * BigInt(10000 - 20)) / BigInt(10000);
+            const amountIn = (amountInToken1 * BigInt(10000 - 20)) / BigInt(10000);
             const calcultedOut = Number(toNano(calculateExpectedCTOut(
                 Number(fromNano(amountIn)),
-                Number(fromNano(data.leftReserve)),
+                Number(fromNano(reserveOut)),
                 0.007,
             )));
 
             const expectedOut = calcultedOut - (calcultedOut * 10 / 10000);
 
-            const senderToken1Wallet = await getWalletContract(bc, setup.token1, alice.address);
-            const senderToken1BalanceBefore = await getWalletBalance(senderToken1Wallet);
+            const senderToken2Wallet = await getWalletContract(bc, setup.token2, alice.address);
+            const senderToken2BalanceBefore = await getWalletBalance(senderToken2Wallet);
 
             // Perform the swap (Token2 for Token1)
             const swapResult = await swap({
                 sender: alice,
                 router: setup.router,
-                tokenIn: setup.token2,
-                tokenOut: setup.token1,
-                amountIn: amountInToken2,
+                tokenIn: setup.token1,
+                tokenOut: setup.token2,
+                amountIn: amountInToken1,
                 minAmountOut: 1n, // Minimal amount to receive
             });
 
-            const senderToken1BalanceAfter = await getWalletBalance(senderToken1Wallet);
-            const receivedTokens = senderToken1BalanceAfter - senderToken1BalanceBefore;
+            const senderToken2BalanceAfter = await getWalletBalance(senderToken2Wallet);
+            const receivedTokens = senderToken2BalanceAfter - senderToken2BalanceBefore;
 
             // Verify the received amount is close to the expected amount
             // Allow for a small deviation due to fixed-point precision differences between TS and FunC
@@ -1267,6 +1253,42 @@ describe('Bonding Curve Price swap', () => {
 
             expect(receivedTokens).toBeGreaterThanOrEqual(lowerOutLimit);
             expect(receivedTokens).toBeLessThanOrEqual(upperOutLimit);
+        });
+
+        it('should enable swap token2 for token1 if token1 reserve is < 80% of initial liquidity', async () => {
+            let setup = await setupDex({
+                createPool: {
+                    amount1: toNano(1000000),
+                    amount2: toNano(2000000),
+                }
+            });
+            let poolData = await (setup.pool as SBCtrPool).getPoolData();
+            expect(poolData.tokenCurveT).toBeGreaterThan(0);
+
+            let swapAmount = toNano(100);
+
+            do {
+                await swap({
+                    sender: alice,
+                    router: setup.router,
+                    tokenIn: setup.token1,
+                    tokenOut: setup.token2,
+                    amountIn: swapAmount,
+                });
+                poolData = await (setup.pool as SBCtrPool).getPoolData();
+                swapAmount = toNano(5);
+            } while (poolData.tokenCurveT > 0);
+
+            // Now, attempt to swap token2 for token1 (expected to succeed)
+            await swap({
+                sender: alice,
+                router: setup.router,
+                tokenIn: setup.token2, // Token2
+                tokenOut: setup.token1, // Token1
+                amountIn: toNano(100),
+                minAmountOut: 1n,
+                expectRefund: false, // Should not bounce
+            });
         });
     });
 
@@ -1299,8 +1321,8 @@ describe('Bonding Curve Price swap', () => {
             });
             await swap({
                 router: setup.router,
-                tokenIn: setup.token2,
-                tokenOut: setup.token1,
+                tokenIn: setup.token1,
+                tokenOut: setup.token2,
                 amountIn: toNano(1000),
                 debugGraph: "sw_DEBUG2"
             });
@@ -1365,11 +1387,9 @@ describe('Bonding Curve Price swap', () => {
             let balance2 = await getWalletBalance(refWallet);
             expect(balance2).toBeGreaterThan(balance1);
         });
-
     });
 
     describe('Params', () => {
-
         it('should swap with different ratio', async () => {
             let setup = await setupDex({
                 createPool: {
@@ -1575,13 +1595,15 @@ describe('Bonding Curve Price swap', () => {
                 createPool: {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
+                    name1: "Token1",
+                    name2: "Token2",
                 }
             });
             let setup2 = await setupDex({
                 createPool: {
                     amount1: toNano(100000000),
                     amount2: toNano(400000000),
-                    name1: "Token2",
+                    name1: setup.name2,
                     name2: "Token3",
                 },
                 routerId: 2
@@ -1654,9 +1676,9 @@ describe('Bonding Curve Price swap', () => {
 
             let pool = await provideLp({
                 ...setup,
-                amount2: toNano(2000),
+                amount2: toNano(20),
                 debugGraph: "directNoDest_1",
-                minLpOut: toNano(10000),
+                minLpOut: toNano(0),
                 expectRevert: true
             });
 
@@ -1665,8 +1687,8 @@ describe('Bonding Curve Price swap', () => {
 
 
             let msgResult = await acc.sendDirectAddLiquidity(deployer.getSender(), {
-                amount1: toNano(5),
-                amount2: toNano(10)
+                amount1: toNano(50),
+                amount2: toNano(100)
             }, toNano(1));
             createMdGraphWithPath({
                 msgResult: msgResult,
@@ -1784,8 +1806,8 @@ describe('Bonding Curve Price swap', () => {
         it('should refund cross-swap on the same router', async () => {
             let setup = await setupDex({
                 createPool: {
-                    amount1: toNano(1000),
-                    amount2: toNano(2000),
+                    amount1: toNano(100000000),
+                    amount2: toNano(200000000),
                 }
             });
 
@@ -1806,7 +1828,7 @@ describe('Bonding Curve Price swap', () => {
                 router: setup.router,
                 tokenIn: setup.token1,
                 tokenOut: setup.token2,
-                amountIn: toNano(1),
+                amountIn: toNano(10),
                 debugGraph: "cross_swap_refund",
                 customPayload: crossSwapPayload({
                     otherTokenWallet: (await getWalletContract(bc, jetton3, setup.router.address)).address,
@@ -1863,13 +1885,15 @@ describe('Bonding Curve Price swap', () => {
                 createPool: {
                     amount1: toNano(1000),
                     amount2: toNano(2000),
+                    name1: "Token1",
+                    name2: "Token2,"
                 }
             });
             let setup2 = await setupDex({
                 createPool: {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
-                    name1: "Token2",
+                    name1: setup.name2,
                     name2: "Token3",
                 },
                 routerId: 2
@@ -1892,15 +1916,17 @@ describe('Bonding Curve Price swap', () => {
         it('should refund cross-swap on 2 routers (mid)', async () => {
             let setup = await setupDex({
                 createPool: {
-                    amount1: toNano(1000),
-                    amount2: toNano(2000),
+                    amount1: toNano(100000000),
+                    amount2: toNano(200000000),
+                    name1: "Token1",
+                    name2: "Token2",
                 }
             });
             let setup2 = await setupDex({
                 createPool: {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
-                    name1: "Token2",
+                    name1: setup.name2,
                     name2: "Token3",
                 },
                 routerId: 2
@@ -1912,7 +1938,7 @@ describe('Bonding Curve Price swap', () => {
                 tokenIn: setup.token1,
                 tokenMid: setup.token2,
                 tokenFinal: setup2.token2,
-                amountIn: toNano(1),
+                amountIn: toNano(100),
                 debugGraph: "cross_swap_router_refund_mid",
                 expectRefundMid: true,
                 minAmountOut2: toNano(100),
@@ -1922,7 +1948,6 @@ describe('Bonding Curve Price swap', () => {
     });
 
     describe('Bounce', () => {
-
         it('should bounce set fees if not admin', async () => {
             let setup = await setupDex({
                 createPool: {

@@ -1,7 +1,7 @@
 global int storage::exp_A_coeff;
 global int storage::exp_B_coeff;
 global int storage::base_usd_rate;
-global int storage::ct_for_curve_phase_pt;
+global int storage::ct_for_curve_phase;
 
 () storage::load() impure inline {
     slice ds = get_data().begin_parse();
@@ -17,7 +17,7 @@ global int storage::ct_for_curve_phase_pt;
     storage::exp_A_coeff = ds~load_uint(<%= calcExpACoeffSize %>);
     storage::exp_B_coeff = ds~load_uint(<%= calcExpBCoeffSize %>);
     storage::base_usd_rate = ds~load_uint(<%= calcBaseUSDRateSize %>);
-    storage::ct_for_curve_phase_pt = ds~load_uint(7);
+    storage::ct_for_curve_phase = ds~load_coins();
 
     storage::_static = ds~load_ref();
     slice static_data = storage::_static.begin_parse();
@@ -45,7 +45,7 @@ global int storage::ct_for_curve_phase_pt;
         .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
         .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
         .store_uint(storage::base_usd_rate, <%= calcBaseUSDRateSize %>)
-        .store_uint(storage::ct_for_curve_phase_pt, 7)
+        .store_coins(storage::ct_for_curve_phase)
         .store_ref(storage::_static)
     .end_cell());
 }

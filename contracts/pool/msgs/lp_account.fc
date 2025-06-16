@@ -50,8 +50,29 @@
 
             try { ;; catch math errors
                 (liquidity, new_collected_protocol_fees0, new_collected_protocol_fees1) = pool::get_lp_provide_out(tot_am0, tot_am1);
-            } catch(_, _) { }
-            
+            } catch(err_arg, err_code) {
+                if (err_code == error::add_liquidity_in_curve_mode) {
+                    msgs::send_simple(
+                        0,
+                        storage::router_address,
+                        router::pay_to(
+                            user_address,
+                            refund_address,
+                            excess_address,
+                            err_code,
+                            0,
+                            null(), ;; cant send anything here , use std transfer
+                            tot_am0,
+                            storage::token0_address,
+                            tot_am1,
+                            storage::token1_address
+                        ),
+                        CARRY_ALL_BALANCE
+                    );
+                    return (true);
+                }
+            }
+
             storage::total_supply_lp += liquidity;
             ;; one side will be 0
             storage::collected_token0_protocol_fee += new_collected_protocol_fees0;

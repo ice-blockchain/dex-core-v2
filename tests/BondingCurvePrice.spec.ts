@@ -1290,6 +1290,64 @@ describe('Bonding Curve Price swap', () => {
                 expectRefund: false, // Should not bounce
             });
         });
+
+        it('should disable add liquidity if token1 reserve is >= 80% of initial liquidity', async () => {
+            let setup = await setupDex({
+                createPool: {
+                    amount1: toNano(1000000),
+                    amount2: toNano(2000000),
+                }
+            });
+            let poolData = await (setup.pool as SBCtrPool).getPoolData();
+            expect(poolData.tokenCurveT).toBeGreaterThan(0);
+
+            // Attempt to provide liquidity (expected to bounce)
+            await provideLp({
+                sender: alice,
+                router: setup.router,
+                token1: setup.token1,
+                token2: setup.token2,
+                amount1: toNano(100),
+                amount2: toNano(200),
+                expectRefund1: true,
+                expectRefund2: true,
+            });
+        });
+
+        it('should enable add liquidity if token1 reserve is < 80% of initial liquidity', async () => {
+            let setup = await setupDex({
+                createPool: {
+                    amount1: toNano(1000000),
+                    amount2: toNano(2000000),
+                }
+            });
+            let poolData = await (setup.pool as SBCtrPool).getPoolData();
+            expect(poolData.tokenCurveT).toBeGreaterThan(0);
+
+            let swapAmount = toNano(100);
+
+            do {
+                await swap({
+                    sender: alice,
+                    router: setup.router,
+                    tokenIn: setup.token1,
+                    tokenOut: setup.token2,
+                    amountIn: swapAmount,
+                });
+                poolData = await (setup.pool as SBCtrPool).getPoolData();
+                swapAmount = toNano(5);
+            } while (poolData.tokenCurveT > 0);
+
+            // Now, attempt to provide liquidity (expected to succeed)
+            await provideLp({
+                sender: alice,
+                router: setup.router,
+                token1: setup.token1,
+                token2: setup.token2,
+                amount1: toNano(100),
+                amount2: toNano(200),
+            });
+        });
     });
 
     describe('Fees', () => {
@@ -1458,7 +1516,8 @@ describe('Bonding Curve Price swap', () => {
                 ...setup,
                 amount1: toNano(0),
                 amount2: toNano(2000),
-                debugGraph: "provide1"
+                debugGraph: "provide1",
+                expectRefund2: true,
             });
 
             await provideLp({
@@ -1467,50 +1526,9 @@ describe('Bonding Curve Price swap', () => {
                 amount2: toNano(0),
                 debugGraph: "provide2",
                 bothPositive1: true,
-                minLpOut: 1n
+                minLpOut: 1n,
+                expectRefund1: true
             });
-        });
-
-
-        it('should provide lp (single side)', async () => {
-            let setup = await setupDex({
-                createPool: {
-                    amount1: toNano(10000),
-                    amount2: toNano(10000),
-                    debugGraph: "create_single",
-                }
-            });
-
-            let pool = await provideLp({
-                ...setup,
-                sender: alice,
-                amount1: toNano(0),
-                amount2: toNano(10000),
-                debugGraph: "provide_single_wss1",
-                bothPositive0: false,
-                bothPositive1: false,
-                minLpOut: 1n
-            });
-
-            let lpWalletAddress = await pool.getWalletAddress(alice.address);
-            let lpWallet = bc.openContract(LPWallet.createFromAddress(lpWalletAddress));
-
-
-            let oldBalance = await getWalletBalance(lpWallet);
-            let msgResult = await lpWallet.sendBurnExt(alice.getSender(), {
-                jettonAmount: oldBalance,
-            }, toNano(1));
-
-            createMdGraphWithPath({
-                msgResult: msgResult,
-                storageMap: storageMap,
-                addressMap: addressMap,
-                bracketMap: bracketMap,
-                output: "burn_single_wss",
-                chartType: "LR"
-            });
-
-            expectNotBounced(msgResult.events);
         });
 
         it('should burn liquidity', async () => {
@@ -1521,20 +1539,7 @@ describe('Bonding Curve Price swap', () => {
                 }
             });
 
-            let pool = await provideLp({
-                ...setup,
-                amount1: toNano(20),
-                amount2: toNano(0)
-            });
-
-            pool = await provideLp({
-                ...setup,
-                amount1: toNano(0),
-                amount2: toNano(20),
-                minLpOut: 1n
-            });
-
-            let lpWalletAddress = await pool.getWalletAddress(deployer.address);
+            let lpWalletAddress = await (setup.pool as SBCtrPool).getWalletAddress(deployer.address);
             let lpWallet = bc.openContract(LPWallet.createFromAddress(lpWalletAddress));
 
             let oldBalance = await getWalletBalance(lpWallet);
@@ -1619,93 +1624,6 @@ describe('Bonding Curve Price swap', () => {
                 debugGraph: "cross_swap_router",
                 referral: alice
             });
-        });
-
-        it('should direct add liquidity (all)', async () => {
-            let setup = await setupDex({
-                createPool: {
-                    amount1: toNano(1000),
-                    amount2: toNano(2000),
-                }
-            });
-
-            let pool = await provideLp({
-                ...setup,
-                amount1: toNano(20),
-                amount2: toNano(0),
-                minLpOut: 0n
-            });
-
-            pool = await provideLp({
-                ...setup,
-                amount1: toNano(0),
-                amount2: toNano(20),
-                minLpOut: 0n
-            });
-
-            let accAddress = await pool.getLPAccountAddress({ userAddress: deployer.address });
-            let acc = bc.openContract(LPAccount.createFromAddress(accAddress));
-
-
-            let msgResult = await acc.sendDirectAddLiquidity(deployer.getSender(), {}, toNano(1));
-            createMdGraphWithPath({
-                msgResult: msgResult,
-                storageMap: storageMap,
-                addressMap: addressMap,
-                bracketMap: bracketMap,
-                output: "direct_2",
-                chartType: "LR",
-                displayDeploy: true
-            });
-            expectNotBounced(msgResult.events);
-            expect(msgResult.transactions).toHaveTransaction({
-                from: deployer.address,
-                to: accAddress,
-                destroyed: true,
-            });
-
-        });
-
-        it('should direct add liquidity (partial)', async () => {
-            let setup = await setupDex({
-                createPool: {
-                    amount1: toNano(1000),
-                    amount2: toNano(2000),
-                }
-            });
-
-            let pool = await provideLp({
-                ...setup,
-                amount2: toNano(20),
-                debugGraph: "directNoDest_1",
-                minLpOut: toNano(0),
-                expectRevert: true
-            });
-
-            let accAddress = await pool.getLPAccountAddress({ userAddress: deployer.address });
-            let acc = bc.openContract(LPAccount.createFromAddress(accAddress));
-
-
-            let msgResult = await acc.sendDirectAddLiquidity(deployer.getSender(), {
-                amount1: toNano(50),
-                amount2: toNano(100)
-            }, toNano(1));
-            createMdGraphWithPath({
-                msgResult: msgResult,
-                storageMap: storageMap,
-                addressMap: addressMap,
-                bracketMap: bracketMap,
-                output: "directNoDest_2",
-                chartType: "LR",
-                displayDeploy: true
-            });
-            expectNotBounced(msgResult.events);
-            expect(msgResult.transactions).toHaveTransaction({
-                from: deployer.address,
-                to: accAddress,
-                destroyed: false,
-            });
-
         });
 
         it('should swap with 0 ref fee', async () => {

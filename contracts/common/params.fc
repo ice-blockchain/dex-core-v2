@@ -10,7 +10,7 @@ const params::version_development = "<%= version[3] %>";
 const params::required_min_liquidity = 1001;
 const params::fee_divider = 10000;
 const params::min_fee = 0; ;; 0%
-const params::max_fee = 100; ;; 1%
+const params::max_fee = 1000; ;; 10%
 const params::uri_base = "https://meta.ston.fi/lp/";
 const params::uri_end = ".json";
 const params::twodays = time::SECONDS_PER_DAY * 2; ;; 24 * 60 * 60 * 2

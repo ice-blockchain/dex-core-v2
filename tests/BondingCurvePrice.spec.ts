@@ -241,6 +241,9 @@ const calculateExpectedCTOut = (
     return amount_out_ct;
 };
 
+const defaultLPFee = 10; // 0.1% in ION
+const defaultProtocolFee = 200; // 2% in Creator token
+
 describe('Bonding Curve Price swap', () => {
     let deployJetton: (params: DeployJettonParams) => Promise<SBCtrJettonMinter>,
         mintTokens: (params: MintParams) => Promise<void>,
@@ -278,9 +281,9 @@ describe('Bonding Curve Price swap', () => {
     beforeAll(async () => {
         preprocBuildContractsLocal({
             dexType: "bonding_curve",
-            defaultProtocolFee: null,
+            defaultProtocolFee: defaultProtocolFee,
             defaultIsLocked: 1,
-            defaultLPFee: null,
+            defaultLPFee: defaultLPFee,
             defaultExpACoeff: defaultACoeff,
             defaultExpBCoeff: defaultBCoeff,
             defaultBaseUSDRate: defaultBaseUSDRate,
@@ -869,6 +872,30 @@ describe('Bonding Curve Price swap', () => {
                     deadline: initTimestamp + HOUR_IN_SECONDS
                 }),
             });
+            if (0) { // debug return code of failed swap
+                for (const event of msgResult.events) {
+                    if (event.type == 'message_sent') {
+                        const bodyCell = event.body; // The 'body' property should be a Cell
+                        // Begin parsing the cell to get a Slice
+                        let slice = bodyCell.beginParse();
+                        // 1. Load the operation code (32 bits)
+                        const opCode = slice.loadUint(32);
+                        // Check if this is indeed the 'pay_to' message
+                        if (opCode === 0x657b54f5) {
+                            const queryId = slice.loadUintBig(64);
+                            // 2. Load '_to_address'
+                            const to_address = slice.loadAddress();
+                            // 3. Load '_excesses_address'
+                            const excesses_address = slice.loadAddress();
+                            // 4. Load '_original_caller'
+                            const original_caller = slice.loadAddress();
+                            // 5. Load '_exit_code' (32 bits)
+                            const exit_code = slice.loadUint(32);
+                            console.log(exit_code);
+                        }
+                    }
+                }
+            }
             if (params.debugGraph) {
                 createMdGraphWithPath({
                     msgResult: msgResult,
@@ -1176,6 +1203,8 @@ describe('Bonding Curve Price swap', () => {
 
     beforeEach(async () => {
         bc = await Blockchain.create();
+        bc.verbosity.print = true;
+        bc.verbosity.debugLogs = true;
         bc.libs = myLibs;
         bc.recordStorage = true
         setFromInitTimestamp(0);
@@ -1220,14 +1249,14 @@ describe('Bonding Curve Price swap', () => {
                 reserveOut = poolData.leftReserve;
             }
 
-            const amountIn = (amountInToken1 * BigInt(10000 - 20)) / BigInt(10000);
+            const amountIn = (amountInToken1 * BigInt(10000 - defaultLPFee)) / BigInt(10000);
             const calcultedOut = Number(toNano(calculateExpectedCTOut(
                 Number(fromNano(amountIn)),
                 Number(fromNano(reserveOut)),
                 0.007,
             )));
 
-            const expectedOut = calcultedOut - (calcultedOut * 10 / 10000);
+            const expectedOut = calcultedOut - (calcultedOut * defaultProtocolFee / 10000);
 
             const senderToken2Wallet = await getWalletContract(bc, setup.token2, alice.address);
             const senderToken2BalanceBefore = await getWalletBalance(senderToken2Wallet);
@@ -1362,8 +1391,8 @@ describe('Bonding Curve Price swap', () => {
             let data = await (setup.pool as SBCtrPool).getPoolData();
             await setFees({
                 ...setup,
-                newLPFee: data.lpFee + 1n,
-                newProtocolFee: data.protocolFee + 1n,
+                newLPFee: data.lpFee - 1n,
+                newProtocolFee: data.protocolFee - 1n,
                 newProtocolFeeAddress: alice.address,
                 debugGraph: "set_fee"
             });
@@ -1601,7 +1630,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
                     name1: "Token1",
-                    name2: "Token2",
+                    name2: "Token3",
                 }
             });
             let setup2 = await setupDex({
@@ -1609,7 +1638,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(400000000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token2",
                 },
                 routerId: 2
             });
@@ -1804,7 +1833,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(2000),
                     name1: "Token1",
-                    name2: "Token2,"
+                    name2: "Token3",
                 }
             });
             let setup2 = await setupDex({
@@ -1812,7 +1841,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token2",
                 },
                 routerId: 2
             });
@@ -1837,7 +1866,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
                     name1: "Token1",
-                    name2: "Token2",
+                    name2: "Token3",
                 }
             });
             let setup2 = await setupDex({
@@ -1845,7 +1874,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token2",
                 },
                 routerId: 2
             });

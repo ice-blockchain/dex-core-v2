@@ -9,7 +9,7 @@ import { BracketKeysType, BracketType, StorageParser } from '../libs/src/graph';
 import { expectBounced, expectEqAddress, expectNotBounced, getWalletContract, SLIM_CONFIG_LEGACY } from '../libs/src/test-helpers';
 import { LPAccount, lpAccStorageParser } from '../wrappers/LPAccount';
 import { LPWallet, lpWalletStorageParser } from '../wrappers/LPWallet';
-import { PoolBCI as Pool, poolBciStorageParser, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from '../wrappers/Pool';
+import { PoolBCI as Pool, poolBciStorageParser, defaultBCLPFee, defaultBCProtocolFee, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from '../wrappers/Pool';
 import { Router, crossSwapPayload, provideLpPayload, routerStorageParser, swapPayload } from '../wrappers/Router';
 import { Vault, vaultStorageParser } from '../wrappers/Vault';
 
@@ -214,7 +214,7 @@ type CrossRouterSwapParams = {
 
 const HOUR_IN_SECONDS = 3600;
 
-const calculateExpectedCTOut = (
+const calculateBondingCurveCTOut = (
     amountIn: number,
     creatorTokensSold: number,
     baseUSDRate: number,
@@ -241,8 +241,24 @@ const calculateExpectedCTOut = (
     return amount_out_ct;
 };
 
-const defaultLPFee = 10; // 0.1% in ION
-const defaultProtocolFee = 200; // 2% in Creator token
+const calculateConstantProductCTOut = (
+    balanceIn: number,
+    amountIn: number,
+    balanceOut: number,
+    maxInRatio: number
+): number => {
+    if (amountIn > balanceIn * maxInRatio) {
+        throw new Error("max_in_ratio: Amount exceeds the maximum allowed ratio.");
+    }
+
+    const denominator = balanceIn + amountIn;
+    const base = balanceIn / denominator;
+    const complementOfBase = 1 - base;
+    return balanceOut * complementOfBase;
+}
+
+const defaultLPFee = 20;
+const defaultProtocolFee = 10;
 
 describe('Bonding Curve Price swap', () => {
     let deployJetton: (params: DeployJettonParams) => Promise<SBCtrJettonMinter>,
@@ -284,6 +300,8 @@ describe('Bonding Curve Price swap', () => {
             defaultProtocolFee: defaultProtocolFee,
             defaultIsLocked: 1,
             defaultLPFee: defaultLPFee,
+            defaultBCLPFee: defaultBCLPFee,
+            defaultBCProtocolFee: defaultBCProtocolFee,
             defaultExpACoeff: defaultACoeff,
             defaultExpBCoeff: defaultBCoeff,
             defaultBaseUSDRate: defaultBaseUSDRate,
@@ -1249,20 +1267,20 @@ describe('Bonding Curve Price swap', () => {
                 reserveOut = poolData.leftReserve;
             }
 
-            const amountIn = (amountInToken1 * BigInt(10000 - defaultLPFee)) / BigInt(10000);
-            const calcultedOut = Number(toNano(calculateExpectedCTOut(
+            const amountIn = (amountInToken1 * (10000n - poolData.bclpFee)) / 10000n;
+            const calcultedOut = toNano(calculateBondingCurveCTOut(
                 Number(fromNano(amountIn)),
                 Number(fromNano(reserveOut)),
                 0.007,
-            )));
+            ));
 
-            const expectedOut = calcultedOut - (calcultedOut * defaultProtocolFee / 10000);
+            const expectedOut = calcultedOut - (calcultedOut * poolData.bcprotocolFee / 10000n);
 
             const senderToken2Wallet = await getWalletContract(bc, setup.token2, alice.address);
             const senderToken2BalanceBefore = await getWalletBalance(senderToken2Wallet);
 
             // Perform the swap (Token2 for Token1)
-            const swapResult = await swap({
+            await swap({
                 sender: alice,
                 router: setup.router,
                 tokenIn: setup.token1,
@@ -1275,8 +1293,7 @@ describe('Bonding Curve Price swap', () => {
             const receivedTokens = senderToken2BalanceAfter - senderToken2BalanceBefore;
 
             // Verify the received amount is close to the expected amount
-            // Allow for a small deviation due to fixed-point precision differences between TS and FunC
-            const tolerance = expectedOut * 10**-9 * 0.001;
+            const tolerance = expectedOut / 1000n;
             const lowerOutLimit = expectedOut - tolerance;
             const upperOutLimit = expectedOut + tolerance;
 
@@ -1284,7 +1301,7 @@ describe('Bonding Curve Price swap', () => {
             expect(receivedTokens).toBeLessThanOrEqual(upperOutLimit);
         });
 
-        it('should enable swap token2 for token1 if token1 reserve is < 80% of initial liquidity', async () => {
+        it('should enable swap token2 (at constant price) for token1 if token1 reserve is < 80% of initial liquidity', async () => {
             let setup = await setupDex({
                 createPool: {
                     amount1: toNano(1000000),
@@ -1308,16 +1325,52 @@ describe('Bonding Curve Price swap', () => {
                 swapAmount = toNano(5);
             } while (poolData.tokenCurveT > 0);
 
+            const senderToken1Wallet = await getWalletContract(bc, setup.token1, alice.address);
+            const senderToken1BalanceBefore = await getWalletBalance(senderToken1Wallet);
+
+            const amountInToken2 = toNano(100);
             // Now, attempt to swap token2 for token1 (expected to succeed)
             await swap({
                 sender: alice,
                 router: setup.router,
                 tokenIn: setup.token2, // Token2
                 tokenOut: setup.token1, // Token1
-                amountIn: toNano(100),
+                amountIn: amountInToken2,
                 minAmountOut: 1n,
                 expectRefund: false, // Should not bounce
             });
+
+            poolData = await (setup.pool as SBCtrPool).getPoolData();
+
+            let reserveIn, reserveOut;
+            if (await addressIsBigger(setup.token1, setup.token2, setup.router.address)) {
+                reserveIn = poolData.rightReserve;
+                reserveOut = poolData.leftReserve;
+            } else {
+                reserveIn = poolData.leftReserve;
+                reserveOut = poolData.rightReserve;
+            }
+
+            const amountIn = (amountInToken2 * (10000n - poolData.lpFee)) / 10000n;
+            const calcultedOut = toNano(calculateConstantProductCTOut(
+                Number(fromNano(reserveIn)),
+                Number(fromNano(amountIn)),
+                Number(fromNano(reserveOut)),
+                0.03,
+            ));
+
+            const expectedOut = calcultedOut - (calcultedOut * poolData.protocolFee / 10000n);
+
+            const senderToken1BalanceAfter = await getWalletBalance(senderToken1Wallet);
+            const receivedTokens = senderToken1BalanceAfter - senderToken1BalanceBefore;
+
+            // Verify the received amount is close to the expected amount
+            const tolerance = expectedOut / 1000n;
+            const lowerOutLimit = expectedOut - tolerance;
+            const upperOutLimit = expectedOut + tolerance;
+
+            expect(receivedTokens).toBeGreaterThanOrEqual(lowerOutLimit);
+            expect(receivedTokens).toBeLessThanOrEqual(upperOutLimit);
         });
 
         it('should disable add liquidity if token1 reserve is >= 80% of initial liquidity', async () => {
@@ -1630,7 +1683,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
                     name1: "Token1",
-                    name2: "Token3",
+                    name2: "Token2",
                 }
             });
             let setup2 = await setupDex({
@@ -1638,7 +1691,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(400000000),
                     name1: setup.name2,
-                    name2: "Token2",
+                    name2: "Token3",
                 },
                 routerId: 2
             });
@@ -1833,7 +1886,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(2000),
                     name1: "Token1",
-                    name2: "Token3",
+                    name2: "Token2",
                 }
             });
             let setup2 = await setupDex({
@@ -1841,7 +1894,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token2",
+                    name2: "Token3",
                 },
                 routerId: 2
             });
@@ -1866,7 +1919,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
                     name1: "Token1",
-                    name2: "Token3",
+                    name2: "Token2",
                 }
             });
             let setup2 = await setupDex({
@@ -1874,7 +1927,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token2",
+                    name2: "Token3",
                 },
                 routerId: 2
             });

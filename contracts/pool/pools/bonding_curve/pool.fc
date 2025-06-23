@@ -2,15 +2,22 @@
 (int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
     int protocol_fee_out = 0;
     int ref_fee_out = 0;
+    int lp_fee = storage::lp_fee;
+    int protocol_fee = storage::protocol_fee;
+
+    if (storage::ct_for_curve_phase != 0) {
+        lp_fee = storage::bc_lp_fee;
+        protocol_fee = storage::bc_protocol_fee;
+    }
 
     ;; LP fee paid in in_token
-    int base_in_without_fee = muldiv(_amount_in, (params::fee_divider - storage::lp_fee), params::fee_divider);
+    int base_in_without_fee = muldiv(_amount_in, (params::fee_divider - lp_fee), params::fee_divider);
 
     int base_out = calc_out_given_in(_reserve_in, base_in_without_fee, _reserve_out);
 
     ;; pay other fees in out_token
-    if storage::protocol_fee > 0 {
-        protocol_fee_out = divc(base_out * storage::protocol_fee, params::fee_divider);
+    if protocol_fee > 0 {
+        protocol_fee_out = divc(base_out * protocol_fee, params::fee_divider);
     }
 
     if _ref_value > 0 {

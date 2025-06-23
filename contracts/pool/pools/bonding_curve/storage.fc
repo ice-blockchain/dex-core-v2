@@ -2,6 +2,8 @@ global int storage::exp_A_coeff;
 global int storage::exp_B_coeff;
 global int storage::base_usd_rate;
 global int storage::ct_for_curve_phase;
+global int storage::bc_lp_fee;
+global int storage::bc_protocol_fee;
 
 () storage::load() impure inline {
     slice ds = get_data().begin_parse();
@@ -14,6 +16,8 @@ global int storage::ct_for_curve_phase;
     storage::protocol_fee_address = ds~load_msg_addr();
     storage::lp_fee = ds~load_uint(16);
     storage::protocol_fee = ds~load_uint(16);
+    storage::bc_lp_fee = ds~load_uint(16);
+    storage::bc_protocol_fee = ds~load_uint(16);
     storage::exp_A_coeff = ds~load_uint(<%= calcExpACoeffSize %>);
     storage::exp_B_coeff = ds~load_uint(<%= calcExpBCoeffSize %>);
     storage::base_usd_rate = ds~load_uint(<%= calcBaseUSDRateSize %>);
@@ -42,6 +46,8 @@ global int storage::ct_for_curve_phase;
         .store_slice(storage::protocol_fee_address)
         .store_uint(storage::lp_fee, 16)
         .store_uint(storage::protocol_fee, 16)
+        .store_uint(storage::bc_lp_fee, 16)
+        .store_uint(storage::bc_protocol_fee, 16)
         .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
         .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
         .store_uint(storage::base_usd_rate, <%= calcBaseUSDRateSize %>)

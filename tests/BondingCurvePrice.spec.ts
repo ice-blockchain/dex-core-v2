@@ -295,6 +295,12 @@ describe('Bonding Curve Price swap', () => {
         bc.now = bc.now + amount;
     };
     beforeAll(async () => {
+        bc = await Blockchain.create();
+        setFromInitTimestamp(0);
+
+        deployer = await bc.treasury('deployer');
+        const sender = deployer.address;
+
         preprocBuildContractsLocal({
             dexType: "bonding_curve",
             defaultProtocolFee: defaultProtocolFee,
@@ -306,6 +312,7 @@ describe('Bonding Curve Price swap', () => {
             defaultExpBCoeff: defaultBCoeff,
             defaultBaseUSDRate: defaultBaseUSDRate,
             defaultCTokenForCurve: defautlCurveT,
+            defaultSwapAddress: `${sender.workChain}, 0x${sender.hash.toString('hex')}`,
         });
 
         const _code = {
@@ -1035,6 +1042,7 @@ describe('Bonding Curve Price swap', () => {
                     })
                 }),
             });
+
             if (params.debugGraph) {
                 createMdGraphWithPath({
                     msgResult: msgResult,
@@ -1276,12 +1284,11 @@ describe('Bonding Curve Price swap', () => {
 
             const expectedOut = calcultedOut - (calcultedOut * poolData.bcprotocolFee / 10000n);
 
-            const senderToken2Wallet = await getWalletContract(bc, setup.token2, alice.address);
+            const senderToken2Wallet = await getWalletContract(bc, setup.token2, deployer.address);
             const senderToken2BalanceBefore = await getWalletBalance(senderToken2Wallet);
 
             // Perform the swap (Token2 for Token1)
             await swap({
-                sender: alice,
                 router: setup.router,
                 tokenIn: setup.token1,
                 tokenOut: setup.token2,
@@ -1315,7 +1322,6 @@ describe('Bonding Curve Price swap', () => {
 
             do {
                 await swap({
-                    sender: alice,
                     router: setup.router,
                     tokenIn: setup.token1,
                     tokenOut: setup.token2,
@@ -1325,13 +1331,12 @@ describe('Bonding Curve Price swap', () => {
                 swapAmount = toNano(5);
             } while (poolData.tokenCurveT > 0);
 
-            const senderToken1Wallet = await getWalletContract(bc, setup.token1, alice.address);
+            const senderToken1Wallet = await getWalletContract(bc, setup.token1, deployer.address);
             const senderToken1BalanceBefore = await getWalletBalance(senderToken1Wallet);
 
             const amountInToken2 = toNano(100);
             // Now, attempt to swap token2 for token1 (expected to succeed)
             await swap({
-                sender: alice,
                 router: setup.router,
                 tokenIn: setup.token2, // Token2
                 tokenOut: setup.token1, // Token1
@@ -1385,7 +1390,6 @@ describe('Bonding Curve Price swap', () => {
 
             // Attempt to provide liquidity (expected to bounce)
             await provideLp({
-                sender: alice,
                 router: setup.router,
                 token1: setup.token1,
                 token2: setup.token2,
@@ -1410,7 +1414,6 @@ describe('Bonding Curve Price swap', () => {
 
             do {
                 await swap({
-                    sender: alice,
                     router: setup.router,
                     tokenIn: setup.token1,
                     tokenOut: setup.token2,
@@ -1422,7 +1425,6 @@ describe('Bonding Curve Price swap', () => {
 
             // Now, attempt to provide liquidity (expected to succeed)
             await provideLp({
-                sender: alice,
                 router: setup.router,
                 token1: setup.token1,
                 token2: setup.token2,
@@ -1677,12 +1679,18 @@ describe('Bonding Curve Price swap', () => {
             });
         });
 
+        // token order on 2 routes will have to adjusted when smart contract code is changed
+        // it depends on defaultSwapSide which means name1 address should be greater than name2
+        // since they are created a 2 routers token name order matters see setupDex nameIn, nameOut
+        // on 1 dex tokens are in correct order to satisfy defaultSwapSide but on 2 routers
+        // the 2 token addresses with higher cell hash need to be in router 1 e.g. (swap Token1, Token2, Token3)
+        // NOTE: this test will fail if defaultSwapAddress is not null, because only 1 address is allowed swap
         it('should cross-swap on 2 routers', async () => {
             let setup = await setupDex({
                 createPool: {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
-                    name1: "Token1",
+                    name1: "Token3",
                     name2: "Token2",
                 }
             });
@@ -1691,7 +1699,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(100000000),
                     amount2: toNano(400000000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token1",
                 },
                 routerId: 2
             });
@@ -1880,12 +1888,13 @@ describe('Bonding Curve Price swap', () => {
             });
         });
 
+        // see should cross-swap on 2 routers
         it('should refund cross-swap on 2 routers (in)', async () => {
             let setup = await setupDex({
                 createPool: {
                     amount1: toNano(1000),
                     amount2: toNano(2000),
-                    name1: "Token1",
+                    name1: "Token3",
                     name2: "Token2",
                 }
             });
@@ -1894,7 +1903,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token1",
                 },
                 routerId: 2
             });
@@ -1913,12 +1922,13 @@ describe('Bonding Curve Price swap', () => {
             });
         });
 
+        // see should cross-swap on 2 routers
         it('should refund cross-swap on 2 routers (mid)', async () => {
             let setup = await setupDex({
                 createPool: {
                     amount1: toNano(100000000),
                     amount2: toNano(200000000),
-                    name1: "Token1",
+                    name1: "Token3",
                     name2: "Token2",
                 }
             });
@@ -1927,7 +1937,7 @@ describe('Bonding Curve Price swap', () => {
                     amount1: toNano(1000),
                     amount2: toNano(4000),
                     name1: setup.name2,
-                    name2: "Token3",
+                    name2: "Token1",
                 },
                 routerId: 2
             });

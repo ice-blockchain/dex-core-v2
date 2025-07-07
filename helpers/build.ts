@@ -22,6 +22,7 @@ import { defaultBCLPFee, defaultBCProtocolFee, defaultACoeff, defaultBCoeff, def
             defaultExpBCoeff: tp == "bonding_curve" ? defaultBCoeff : undefined,
             defaultBaseUSDRate: tp == "bonding_curve" ? defaultBaseUSDRate : undefined,
             defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurveT : undefined,
+            defaultSwapAddress: tp == "bonding_curve" ? "0, 0" : undefined,
         };
         preprocBuildContractsLocal(ops);
 

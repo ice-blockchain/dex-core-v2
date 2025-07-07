@@ -895,27 +895,32 @@ export const defaultBaseUSDRate = 7000000000000000n;
 export const defaultBCLPFee = 10n; // in general it will be 0, let's have some for test
 export const defaultBCProtocolFee = 200n; // 2% fee, 50% in ION and 50% in Creator token
 
-export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcprotocolFee?: bigint, expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurveT?: bigint }): Cell {
+export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcprotocolFee?: bigint, expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
     let expACoeff = config.expACoeff ?? defaultACoeff;
     let expBCoeff = config.expBCoeff ?? defaultBCoeff;
     let baseUSDRate = config.baseUSDRate ?? defaultBaseUSDRate;
     let ctokenToCurveT = config.ctokenToCurveT ?? defautlCurveT;
     return beginCell()
         .storeUint(1, 1)
-        .storeCoins(config.leftReserve)
-        .storeCoins(config.rightReserve)
-        .storeCoins(config.totalSupplyLP)
-        .storeCoins(config.collectedLeftJettonProtocolFees)
-        .storeCoins(config.collectedRightJettonProtocolFees)
-        .storeAddress(config.protocolFeeAddress)
-        .storeUint(config.lpFee, 16)
-        .storeUint(config.protocolFee, 16)
-        .storeUint(config.bclpFee ?? defaultBCLPFee, 16)
-        .storeUint(config.bcprotocolFee ?? defaultBCProtocolFee, 16)
-        .storeUint(expACoeff, expACoeff.toString(2).length)
-        .storeUint(expBCoeff, expBCoeff.toString(2).length)
-        .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
-        .storeCoins(ctokenToCurveT)
+        .storeRef(beginCell()
+            .storeCoins(config.leftReserve)
+            .storeCoins(config.rightReserve)
+            .storeCoins(config.totalSupplyLP)
+            .storeCoins(config.collectedLeftJettonProtocolFees)
+            .storeCoins(config.collectedRightJettonProtocolFees)
+            .storeAddress(config.protocolFeeAddress)
+            .storeUint(config.lpFee, 16)
+            .storeUint(config.protocolFee, 16)
+            .endCell())
+        .storeRef(beginCell()
+            .storeUint(config.bclpFee ?? defaultBCLPFee, 16)
+            .storeUint(config.bcprotocolFee ?? defaultBCProtocolFee, 16)
+            .storeUint(expACoeff, expACoeff.toString(2).length)
+            .storeUint(expBCoeff, expBCoeff.toString(2).length)
+            .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
+            .storeCoins(ctokenToCurveT)
+            .storeAddress(config.swapAddress)
+            .endCell())
         .storeRef(beginCell()
             .storeAddress(config.routerAddress)
             .storeAddress(config.leftWalletAddress)
@@ -930,20 +935,31 @@ export function poolBciStorageParser(src: Cell) {
     let ds = src.beginParse()
     return {
         isLocked: ds.loadBoolean(),
-        reserve0: ds.loadCoins(),
-        reserve1: ds.loadCoins(),
-        totalSupplyLp: ds.loadCoins(),
-        collectedToken0ProtocolFee: ds.loadCoins(),
-        collectedToken1ProtocolFee: ds.loadCoins(),
-        protocolFeeAddress: ds.loadMaybeAddress(),
-        lpFee: ds.loadUintBig(16),
-        protocolFee: ds.loadUintBig(16),
-        bclpFee: ds.loadUintBig(16),
-        bcprotocolFee: ds.loadUintBig(16),
-        expACoeff: ds.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
-        expBCoeff: ds.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
-        baseUSDRate: ds.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
-        ctokenToCurveT: ds.loadCoins(),
+        ...(() => {
+            let ds_p = ds.loadRef().beginParse()
+            return {
+                reserve0: ds_p.loadCoins(),
+                reserve1: ds_p.loadCoins(),
+                totalSupplyLp: ds_p.loadCoins(),
+                collectedToken0ProtocolFee: ds_p.loadCoins(),
+                collectedToken1ProtocolFee: ds_p.loadCoins(),
+                protocolFeeAddress: ds_p.loadMaybeAddress(),
+                lpFee: ds_p.loadUintBig(16),
+                protocolFee: ds_p.loadUintBig(16),
+            }
+        })(),
+        ...(() => {
+            let ds_p = ds.loadRef().beginParse()
+            return {
+                bclpFee: ds_p.loadUintBig(16),
+                bcprotocolFee: ds_p.loadUintBig(16),
+                expACoeff: ds_p.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
+                expBCoeff: ds_p.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
+                baseUSDRate: ds_p.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
+                ctokenToCurveT: ds_p.loadCoins(),
+                swapAddress: ds_p.loadMaybeAddress(),
+            }
+        })(),
         ...(() => {
             let ds_p = ds.loadRef().beginParse()
             return {
@@ -988,6 +1004,7 @@ export class PoolBCI extends PoolBase {
             coefficientB: result.stack.readBigNumber(),
             baseUSDRate: result.stack.readBigNumber(),
             tokenCurveT: result.stack.readBigNumber(),
+            swapAddress: result.stack.readAddressOpt(),
         };
     }
 
@@ -1011,6 +1028,7 @@ export class PoolBCI extends PoolBase {
             coefficientB: defaultBCoeff,
             baseUSDRate: defaultBaseUSDRate,
             tokenCurveT: defautlCurveT,
+            swapAddress: HOLE_ADDRESS as Address | null,
         }
         try {
             data = await this.getPoolData(provider)

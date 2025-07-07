@@ -1,4 +1,5 @@
 
+const error::unauthorized_swap_address = 5108;
 (int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
     int protocol_fee_out = 0;
     int ref_fee_out = 0;
@@ -6,6 +7,11 @@
     int protocol_fee = storage::protocol_fee;
 
     if (storage::ct_for_curve_phase != 0) {
+        if (storage::bc_swap_address.preload_uint(2) != 0) {
+            slice in_msg_body = ctx.at(BODY);
+            slice sender = in_msg_body~load_msg_addr();
+            throw_unless(error::unauthorized_swap_address, equal_slices(sender, storage::bc_swap_address));
+        }
         lp_fee = storage::bc_lp_fee;
         protocol_fee = storage::bc_protocol_fee;
     }

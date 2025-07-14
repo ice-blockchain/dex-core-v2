@@ -261,6 +261,15 @@ function resolveFeeBps(val: string | undefined) {
     return Number(strVal.replace(/_| /g, ""));
 }
 
+function resolveBigInt(val: string | undefined) {
+    const strVal = String(val);
+    if ((typeof val === "undefined")) {
+        return null;
+    }
+
+    return BigInt(strVal.replace(/_| /g, ""));
+}
+
 export const configParams = {
     routerAddress: resolvers.address,
     firstJettonMinter: resolvers.address,
@@ -281,7 +290,14 @@ export const configParams = {
     routerId: resolvers.number,
     defaultIsLocked: resolvers.number,
     defaultLPFee: resolveFeeBps,
-    defaultProtocolFee: resolveFeeBps
+    defaultProtocolFee: resolveFeeBps,
+    defaultBCLPFee: resolveBigInt,
+    defaultBCProtocolFee: resolveBigInt,
+    defaultExpACoeff: resolveBigInt,
+    defaultExpBCoeff: resolveBigInt,
+    defaultBaseUSDRate: resolveBigInt,
+    defaultCTokenForCurve: resolveBigInt,
+    defaultSwapAddress: resolvers.address,
 };
 
 export const cliConfig = new CliConfig(configParams, {
@@ -289,4 +305,11 @@ export const cliConfig = new CliConfig(configParams, {
     defaultLPFee: true,
     defaultProtocolFee: true,
     defaultIsLocked: true,
+    defaultBCLPFee: true,
+    defaultBCProtocolFee: true,
+    defaultExpACoeff: true,
+    defaultExpBCoeff: true,
+    defaultBaseUSDRate: true,
+    defaultCTokenForCurve: true,
+    defaultSwapAddress: true,
 });

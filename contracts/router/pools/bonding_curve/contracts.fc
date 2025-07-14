@@ -1,0 +1,7 @@
+(cell) pool::internal_set_params(slice _excesses_address, cell fees, cell usd_rate) inline {
+    return begin_message(op::internal_set_params)
+        .store_slice(_excesses_address)
+        .store_ref(fees)
+        .store_ref(usd_rate)
+    .end_cell();
+}

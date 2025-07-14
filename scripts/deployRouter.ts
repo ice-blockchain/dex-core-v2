@@ -39,12 +39,26 @@ export async function run(provider: NetworkProvider, args: string[]) {
     color.log(`\t<y>defaultProtocolFee: <b>${config.defaultProtocolFee === null ? prettyFees(10) : prettyFees(config.defaultProtocolFee)}`)
     color.log(`\t<y>defaultLPFee: <b>${config.defaultLPFee === null ? prettyFees(20) : prettyFees(config.defaultLPFee)}`)
 
+    let defaultSwapAddress = undefined;
+    if (config.defaultSwapAddress) {
+        const address = config.defaultSwapAddress;
+        defaultSwapAddress = `${address.workChain}, 0x${address.hash.toString('hex')}`
+    } else if (config.dexType == 'bonding_curve') {
+        defaultSwapAddress = '0, 0'
+    }
     waitConfirm()
     preprocBuildContractsLocal({
         dexType: config.dexType,
         defaultIsLocked: config.defaultIsLocked,
         defaultLPFee: config.defaultLPFee,
-        defaultProtocolFee: config.defaultProtocolFee
+        defaultProtocolFee: config.defaultProtocolFee,
+        defaultBCLPFee: config.defaultBCLPFee,
+        defaultBCProtocolFee: config.defaultBCProtocolFee,
+        defaultExpACoeff: config.defaultExpACoeff,
+        defaultExpBCoeff: config.defaultExpBCoeff,
+        defaultBaseUSDRate: configdefaultBaseUSDRate,
+        defaultCTokenForCurve: config.defaultCTokenForCurve,
+        defaultSwapAddress: defaultSwapAddress,
     });
 
     const lpWalletCode = await compile("LPWallet")

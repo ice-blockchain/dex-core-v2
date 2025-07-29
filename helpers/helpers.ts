@@ -82,6 +82,7 @@ export function preprocBuildContractsLocal(opts: {
     defaultBaseUSDRate?: bigint,
     defaultCTokenForCurve?: bigint
     defaultSwapAddress?: string,
+    defaultSwapAddressExpirationTime?: bigint
 }): void {
     process.env.DEX_TYPE = opts.dexType
     preprocBuildContracts({
@@ -101,6 +102,7 @@ export function preprocBuildContractsLocal(opts: {
             calcBaseUSDRateSize: opts.defaultBaseUSDRate ? opts.defaultBaseUSDRate.toString(2).length : undefined,
             defaultCTokenForCurve: opts.defaultCTokenForCurve ?? undefined,
             defaultSwapAddress: opts.defaultSwapAddress ?? undefined,
+            defaultSwapAddressExpirationTime: opts.defaultSwapAddressExpirationTime ?? undefined,
             version: parseVersion(),
             renderRouterAdminExtCalls: fs.existsSync(`contracts/router/pools/${opts.dexType}/ext_admin.fc`),
             renderPoolExtRouterCalls: fs.existsSync(`contracts/pool/pools/${opts.dexType}/ext_router.fc`),
@@ -298,6 +300,7 @@ export const configParams = {
     defaultBaseUSDRate: resolveBigInt,
     defaultCTokenForCurve: resolveBigInt,
     defaultSwapAddress: resolvers.address,
+    defaultSwapAddressExpirationTime: resolveBigInt,
 };
 
 export const cliConfig = new CliConfig(configParams, {
@@ -312,4 +315,5 @@ export const cliConfig = new CliConfig(configParams, {
     defaultBaseUSDRate: true,
     defaultCTokenForCurve: true,
     defaultSwapAddress: true,
+    defaultSwapAddressExpirationTime: true,
 });

@@ -59,6 +59,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
         defaultBaseUSDRate: configdefaultBaseUSDRate,
         defaultCTokenForCurve: config.defaultCTokenForCurve,
         defaultSwapAddress: defaultSwapAddress,
+        defaultSwapAddressExirationTime: 60000n,
     });
 
     const lpWalletCode = await compile("LPWallet")

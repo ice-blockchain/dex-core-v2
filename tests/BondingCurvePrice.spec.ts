@@ -311,6 +311,7 @@ describe('Bonding Curve Price swap', () => {
             defaultBaseUSDRate: defaultBaseUSDRate,
             defaultCTokenForCurve: defautlCurveT,
             defaultSwapAddress: `${sender.workChain}, 0x${sender.hash.toString('hex')}`,
+            defaultSwapAddressExpirationTime: 100n,
         });
 
         const _code = {
@@ -1315,14 +1316,16 @@ describe('Bonding Curve Price swap', () => {
                 reserveOut = poolData.leftReserve;
             }
 
-            const amountIn = (amountInToken1 * (10000n - poolData.bclpFee)) / 10000n;
+            const amountWithoutFee = (amountInToken1 * (10000n - poolData.bclpFee)) / 10000n;
+            const protocolFeeIn = poolData.bcprotocolFee * 5000n / 10000n;
+            const amountIn = (amountWithoutFee * (10000n - protocolFeeIn)) / 10000n;
             const calcultedOut = toNano(calculateBondingCurveCTOut(
                 Number(fromNano(amountIn)),
                 Number(fromNano(reserveOut)),
                 0.007,
             ));
 
-            const expectedOut = calcultedOut - (calcultedOut * poolData.bcprotocolFee / 10000n);
+            const expectedOut = calcultedOut - (calcultedOut * (poolData.bcprotocolFee - protocolFeeIn) / 10000n);
 
             const senderToken2Wallet = await getWalletContract(bc, setup.token2, deployer.address);
             const senderToken2BalanceBefore = await getWalletBalance(senderToken2Wallet);
@@ -1396,7 +1399,9 @@ describe('Bonding Curve Price swap', () => {
                 reserveOut = poolData.rightReserve;
             }
 
-            const amountIn = (amountInToken2 * (10000n - poolData.lpFee)) / 10000n;
+            const amountWithoutFee = (amountInToken2 * (10000n - poolData.lpFee)) / 10000n;
+            const protocolFeeIn = poolData.protocolFee * 5000n / 10000n;
+            const amountIn = (amountWithoutFee * (10000n - protocolFeeIn)) / 10000n;
             const calcultedOut = toNano(calculateConstantProductCTOut(
                 Number(fromNano(reserveIn)),
                 Number(fromNano(amountIn)),
@@ -1404,7 +1409,7 @@ describe('Bonding Curve Price swap', () => {
                 0.03,
             ));
 
-            const expectedOut = calcultedOut - (calcultedOut * poolData.protocolFee / 10000n);
+            const expectedOut = calcultedOut - (calcultedOut * (poolData.protocolFee - protocolFeeIn) / 10000n);
 
             const senderToken1BalanceAfter = await getWalletBalance(senderToken1Wallet);
             const receivedTokens = senderToken1BalanceAfter - senderToken1BalanceBefore;
@@ -1773,6 +1778,20 @@ describe('Bonding Curve Price swap', () => {
                 },
                 routerId: 2
             });
+
+            await crossRouterSwap({
+                router: setup.router,
+                router2: setup2.router,
+                tokenIn: setup.token1,
+                tokenMid: setup.token2,
+                tokenFinal: setup2.token2,
+                amountIn: toNano(1000),
+                debugGraph: "cross_swap_router",
+                referral: alice,
+                expectRefundMid: true
+            });
+
+            advanceFromCurrentTS(101);
 
             await crossRouterSwap({
                 router: setup.router,

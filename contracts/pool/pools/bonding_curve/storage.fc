@@ -5,6 +5,7 @@ global int storage::ct_for_curve_phase;
 global int storage::bc_lp_fee;
 global int storage::bc_protocol_fee;
 global slice storage::bc_swap_address;
+global int storage::bc_swap_address_expiration;
 
 () storage::load() impure inline {
     slice ds = get_data().begin_parse();
@@ -31,6 +32,7 @@ global slice storage::bc_swap_address;
     storage::base_usd_rate = bc~load_uint(<%= calcBaseUSDRateSize %>);
     storage::ct_for_curve_phase = bc~load_coins();
     storage::bc_swap_address = bc~load_msg_addr();
+    storage::bc_swap_address_expiration = bc~load_uint(32);
     bc.end_parse();
 
     storage::_static = ds~load_ref();
@@ -66,6 +68,7 @@ global slice storage::bc_swap_address;
             .store_uint(storage::base_usd_rate, <%= calcBaseUSDRateSize %>)
             .store_coins(storage::ct_for_curve_phase)
             .store_slice(storage::bc_swap_address)
+            .store_uint(storage::bc_swap_address_expiration, 32)
             .end_cell())
         .store_ref(storage::_static)
     .end_cell());

@@ -1,3 +1,19 @@
+
+() emit_log_simple(int event_id, slice data) impure inline {
+  var msg = begin_cell()
+          .store_uint (12, 4) ;; ext_out_msg_info$11 src:MsgAddressInt ()
+          .store_uint (1, 2)
+          .store_uint (256, 9)
+          .store_uint(event_id, 256)
+          .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
+          .store_slice(data)
+          .end_cell();
+  send_raw_message(msg, 0);
+}
+
+const FeesSwapped = 0xfee53aed;
+const CrTenBurned = 0xc7b021ed;
+
 () handle_router_messages() impure inline {
     slice in_msg_body = ctx.at(BODY);
 
@@ -83,7 +99,8 @@
             ;; initialize variables
             int out0 = 0; 
             int out1 = 0; 
-            int protocol_fee_out = 0; 
+            int protocol_fee_out0 = 0;
+            int protocol_fee_out1 = 0;
             int ref_fee_out0 = 0; 
             int ref_fee_out1 = 0;
             ;; if no ref address - set fee value to 0
@@ -91,17 +108,19 @@
             
             if amount0 { 
                 ;; swap token0 for token1
-                (out1, protocol_fee_out, ref_fee_out1) = pool::get_swap_out(true, ref_value, amount0, storage::reserve0, storage::reserve1);
-                storage::reserve0 += amount0;
-                storage::reserve1 -= (out1 + protocol_fee_out + ref_fee_out1);
-                storage::collected_token1_protocol_fee += protocol_fee_out;
+                (out1, protocol_fee_out1, ref_fee_out1, protocol_fee_out0) = pool::get_swap_out(true, ref_value, amount0, storage::reserve0, storage::reserve1);
+                storage::reserve0 += (amount0 - protocol_fee_out0);
+                storage::reserve1 -= (out1 + protocol_fee_out1 + ref_fee_out1);
+                storage::collected_token0_protocol_fee += protocol_fee_out0;
+                storage::collected_token1_protocol_fee += protocol_fee_out1;
             } else { 
                 ;; no need for elseif, see above
                 ;; swap token1 for token0
-                (out0, protocol_fee_out, ref_fee_out0) = pool::get_swap_out(false, ref_value, amount1, storage::reserve1, storage::reserve0);
-                storage::reserve0 -= (out0 + protocol_fee_out + ref_fee_out0);
-                storage::reserve1 += amount1;
-                storage::collected_token0_protocol_fee += protocol_fee_out;
+                (out0, protocol_fee_out0, ref_fee_out0, protocol_fee_out1) = pool::get_swap_out(false, ref_value, amount1, storage::reserve1, storage::reserve0);
+                storage::reserve0 -= (out0 + protocol_fee_out0 + ref_fee_out0);
+                storage::reserve1 += (amount1 - protocol_fee_out1);
+                storage::collected_token0_protocol_fee += protocol_fee_out0;
+                storage::collected_token1_protocol_fee += protocol_fee_out1;
             }
 
             ;; one side will always be zero, so we can sum
@@ -130,6 +149,34 @@
                         storage::token1_address), 
                     NORMAL
                 );
+            }
+
+            if ((protocol_fee_out0 > 0) & (protocol_fee_out1 > 0)) {
+                int amount1 = 0;
+                int amount2 = 0;
+                int amountIn = 0;
+                int amountOut = 0;
+                if amount0 {
+                    amountIn = amount0;
+                    amountOut = out1;
+                    amount1 = protocol_fee_out0;
+                    amount2 = protocol_fee_out1;
+                } else {
+                    amountIn = amount1;
+                    amountOut = out0;
+                    amount1 = protocol_fee_out1;
+                    amount2 = protocol_fee_out0;
+                }
+                emit_log_simple(FeesSwapped, begin_cell()
+                                            .store_coins(amountIn)
+                                            .store_coins(amountOut)
+                                            .end_cell()
+                                            .begin_parse());
+                emit_log_simple(CrTenBurned, begin_cell()
+                                            .store_coins(amount1)
+                                            .store_coins(amount2)
+                                            .end_cell()
+                                            .begin_parse());
             }
 
             msgs::send_simple(

@@ -23,6 +23,7 @@ import { defaultBCLPFee, defaultBCProtocolFee, defaultACoeff, defaultBCoeff, def
             defaultBaseUSDRate: tp == "bonding_curve" ? defaultBaseUSDRate : undefined,
             defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurveT : undefined,
             defaultSwapAddress: tp == "bonding_curve" ? "0, 0" : undefined,
+            defaultSwapAddressExpirationTime: tp == "bonding_curve" ? 60000n : undefined,
         };
         preprocBuildContractsLocal(ops);
 

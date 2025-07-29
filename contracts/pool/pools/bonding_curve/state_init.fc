@@ -35,6 +35,7 @@
             .store_uint(<%= defaultBaseUSDRate %>, <%= calcBaseUSDRateSize %>)
             .store_coins(<%= defaultCTokenForCurve %>)
             .store_slice(to_std_address(<%= defaultSwapAddress %>))
+            .store_uint(0, 32)
             .end_cell())
         .end_cell().begin_parse();
 }

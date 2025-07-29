@@ -1,4 +1,4 @@
-(int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
+(int, int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
     int base_out = muldiv(_amount_in, (params::fee_divider - storage::lp_fee), params::fee_divider);
 
     int protocol_fee_out = 0;
@@ -13,7 +13,7 @@
     }
 
     base_out -= protocol_fee_out + ref_fee_out;
-    return (base_out, protocol_fee_out, ref_fee_out);
+    return (base_out, protocol_fee_out, ref_fee_out, 0);
 }
 
 (int) pool::get_lp_provide_init_out(int _left_amount, int _right_amount) inline {

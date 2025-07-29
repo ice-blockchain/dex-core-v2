@@ -1,4 +1,4 @@
-(int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
+(int, int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
     int protocol_fee_out = 0;
     int ref_fee_out = 0;
     ;; LP fee paid in in_token
@@ -27,7 +27,7 @@
     }
 
     base_out -= protocol_fee_out + ref_fee_out;
-    return (base_out, protocol_fee_out, ref_fee_out);
+    return (base_out, protocol_fee_out, ref_fee_out, 0);
 }
 
 (int) pool::get_lp_provide_init_out(int _left_amount, int _right_amount) impure inline {

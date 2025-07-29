@@ -920,6 +920,7 @@ export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcp
             .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
             .storeCoins(ctokenToCurveT)
             .storeAddress(config.swapAddress)
+            .storeUint(0, 32)
             .endCell())
         .storeRef(beginCell()
             .storeAddress(config.routerAddress)
@@ -958,6 +959,7 @@ export function poolBciStorageParser(src: Cell) {
                 baseUSDRate: ds_p.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
                 ctokenToCurveT: ds_p.loadCoins(),
                 swapAddress: ds_p.loadMaybeAddress(),
+                swapAddressExiration: ds_p.loadUintBig(32),
             }
         })(),
         ...(() => {
@@ -1005,6 +1007,7 @@ export class PoolBCI extends PoolBase {
             baseUSDRate: result.stack.readBigNumber(),
             tokenCurveT: result.stack.readBigNumber(),
             swapAddress: result.stack.readAddressOpt(),
+            swapAddressExiration: result.stack.readBigNumber(),
         };
     }
 
@@ -1029,6 +1032,7 @@ export class PoolBCI extends PoolBase {
             baseUSDRate: defaultBaseUSDRate,
             tokenCurveT: defautlCurveT,
             swapAddress: HOLE_ADDRESS as Address | null,
+            swapAddressExiration: 0n,
         }
         try {
             data = await this.getPoolData(provider)

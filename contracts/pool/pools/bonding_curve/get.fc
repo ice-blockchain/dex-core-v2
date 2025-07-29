@@ -19,6 +19,7 @@ _ get_pool_data() method_id {
         storage::exp_B_coeff,
         storage::base_usd_rate,
         storage::ct_for_curve_phase,
-        storage::bc_swap_address
+        storage::bc_swap_address,
+        storage::bc_swap_address_expiration
     );
 }

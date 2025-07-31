@@ -893,9 +893,10 @@ export const defaultACoeff = 1105000000000n;
 export const defaultBCoeff = 7056000000n;
 export const defaultBaseUSDRate = 7000000000000000n;
 export const defaultBCLPFee = 10n; // in general it will be 0, let's have some for test
-export const defaultBCProtocolFee = 200n; // 2% fee, 50% in ION and 50% in Creator token
+export const defaultBCProtocolFee = 200n; // 2% fee
+export const defaultProtocolFeePCT = 5000n; // 50% in ION and 50% in Creator token
 
-export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcprotocolFee?: bigint, expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
+export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcprotocolFee?: bigint, protocolFeePCT?: bigint, expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
     let expACoeff = config.expACoeff ?? defaultACoeff;
     let expBCoeff = config.expBCoeff ?? defaultBCoeff;
     let baseUSDRate = config.baseUSDRate ?? defaultBaseUSDRate;
@@ -915,6 +916,7 @@ export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcp
         .storeRef(beginCell()
             .storeUint(config.bclpFee ?? defaultBCLPFee, 16)
             .storeUint(config.bcprotocolFee ?? defaultBCProtocolFee, 16)
+            .storeUint(config.protocolFeePCT ?? defaultProtocolFeePCT, 16)
             .storeUint(expACoeff, expACoeff.toString(2).length)
             .storeUint(expBCoeff, expBCoeff.toString(2).length)
             .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
@@ -954,6 +956,7 @@ export function poolBciStorageParser(src: Cell) {
             return {
                 bclpFee: ds_p.loadUintBig(16),
                 bcprotocolFee: ds_p.loadUintBig(16),
+                protocolFeePCT: ds_p.loadUintBig(16),
                 expACoeff: ds_p.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
                 expBCoeff: ds_p.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
                 baseUSDRate: ds_p.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
@@ -999,6 +1002,7 @@ export class PoolBCI extends PoolBase {
             protocolFee: result.stack.readBigNumber(),
             bclpFee: result.stack.readBigNumber(),
             bcprotocolFee: result.stack.readBigNumber(),
+            protocolFeePCT: result.stack.readBigNumber(),
             protocolFeeAddress: result.stack.readAddressOpt(),
             collectedLeftJettonProtocolFees: result.stack.readBigNumber(),
             collectedRightJettonProtocolFees: result.stack.readBigNumber(),
@@ -1024,6 +1028,7 @@ export class PoolBCI extends PoolBase {
             protocolFee: 0n,
             bclpFee: 0n,
             bcprotocolFee: 0n,
+            protocolFeePCT: 0n,
             protocolFeeAddress: HOLE_ADDRESS as Address | null,
             collectedLeftJettonProtocolFees: 0n,
             collectedRightJettonProtocolFees: 0n,

@@ -4,6 +4,7 @@ global int storage::base_usd_rate;
 global int storage::ct_for_curve_phase;
 global int storage::bc_lp_fee;
 global int storage::bc_protocol_fee;
+global int storage::protocol_fee_pct;
 global slice storage::bc_swap_address;
 global int storage::bc_swap_address_expiration;
 
@@ -27,6 +28,7 @@ global int storage::bc_swap_address_expiration;
     slice bc = bc_data.begin_parse();
     storage::bc_lp_fee = bc~load_uint(16);
     storage::bc_protocol_fee = bc~load_uint(16);
+    storage::protocol_fee_pct = bc~load_uint(16);
     storage::exp_A_coeff = bc~load_uint(<%= calcExpACoeffSize %>);
     storage::exp_B_coeff = bc~load_uint(<%= calcExpBCoeffSize %>);
     storage::base_usd_rate = bc~load_uint(<%= calcBaseUSDRateSize %>);
@@ -63,6 +65,7 @@ global int storage::bc_swap_address_expiration;
         .store_ref(begin_cell()
             .store_uint(storage::bc_lp_fee, 16)
             .store_uint(storage::bc_protocol_fee, 16)
+            .store_uint(storage::protocol_fee_pct, 16)
             .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
             .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
             .store_uint(storage::base_usd_rate, <%= calcBaseUSDRateSize %>)

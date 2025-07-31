@@ -21,13 +21,12 @@ const error::unauthorized_swap_address = 5108;
     ;; LP fee paid in in_token
     int base_in_without_lp_fee = muldiv(_amount_in, (params::fee_divider - lp_fee), params::fee_divider);
 
-    ;; initially 50/50
-    int fee_in = 0;
-    if (protocol_fee) {
-        fee_in = muldiv(protocol_fee, 5000, params::fee_divider);
-        protocol_fee -= fee_in;
+    if protocol_fee > 0 {
+        protocol_fee_in = muldiv(protocol_fee, storage::protocol_fee_pct, params::fee_divider);
+        protocol_fee -= protocol_fee_in;
     }
-    int base_in_without_fee = muldiv(base_in_without_lp_fee, (params::fee_divider - fee_in), params::fee_divider);
+
+    int base_in_without_fee = muldiv(base_in_without_lp_fee, (params::fee_divider - protocol_fee_in), params::fee_divider);
     int base_out = calc_out_given_in(_reserve_in, base_in_without_fee, _reserve_out);
 
     ;; pay other fees in out_token

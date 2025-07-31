@@ -54,6 +54,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
         defaultProtocolFee: config.defaultProtocolFee,
         defaultBCLPFee: config.defaultBCLPFee,
         defaultBCProtocolFee: config.defaultBCProtocolFee,
+        defaultProtocolFeePCT: config.defaultProtocolFeePCT,
         defaultExpACoeff: config.defaultExpACoeff,
         defaultExpBCoeff: config.defaultExpBCoeff,
         defaultBaseUSDRate: configdefaultBaseUSDRate,

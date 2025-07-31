@@ -30,6 +30,7 @@
         .store_ref(begin_cell()
             .store_uint(<%= defaultBCLPFee %>, 16)  ;; storage::bc_lp_fee
             .store_uint(<%= defaultBCProtocolFee %>, 16)  ;; storage::bc_protocol_fee
+            .store_uint(<%= defaultProtocolFeePCT %>, 16) ;; storage::protocol_fee_pct
             .store_uint(<%= defaultExpACoeff %>, <%= calcExpACoeffSize %>)
             .store_uint(<%= defaultExpBCoeff %>, <%= calcExpBCoeffSize %>)
             .store_uint(<%= defaultBaseUSDRate %>, <%= calcBaseUSDRateSize %>)

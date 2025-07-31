@@ -12,6 +12,7 @@ _ get_pool_data() method_id {
         storage::protocol_fee,
         storage::bc_lp_fee,
         storage::bc_protocol_fee,
+        storage::protocol_fee_pct,
         storage::protocol_fee_address,
         storage::collected_token0_protocol_fee,
         storage::collected_token1_protocol_fee,

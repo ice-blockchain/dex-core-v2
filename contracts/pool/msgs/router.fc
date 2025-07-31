@@ -1,14 +1,17 @@
 
 () emit_log_simple(int event_id, slice data) impure inline {
-  var msg = begin_cell()
-          .store_uint (12, 4) ;; ext_out_msg_info$11 src:MsgAddressInt ()
-          .store_uint (1, 2)
-          .store_uint (256, 9)
-          .store_uint(event_id, 256)
-          .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
-          .store_slice(data)
-          .end_cell();
-  send_raw_message(msg, 0);
+    var msg = begin_cell()
+        .store_uint(12, 4)
+        .store_uint(1, 2)
+        .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
+        .store_slice(begin_cell()
+            .store_uint(32, 9)
+            .store_uint(event_id, 32)
+            .store_slice(data)
+            .end_cell()
+            .begin_parse())
+        .end_cell();
+    send_raw_message(msg, 0);
 }
 
 const FeesSwapped = 0xfee53aed;
@@ -152,20 +155,20 @@ const CrTenBurned = 0xc7b021ed;
             }
 
             if ((protocol_fee_out0 > 0) & (protocol_fee_out1 > 0)) {
-                int amount1 = 0;
-                int amount2 = 0;
+                int feeIn = 0;
+                int feeOut = 0;
                 int amountIn = 0;
                 int amountOut = 0;
-                if amount0 {
+                if amount0 > 0 {
                     amountIn = amount0;
                     amountOut = out1;
-                    amount1 = protocol_fee_out0;
-                    amount2 = protocol_fee_out1;
+                    feeIn = protocol_fee_out0;
+                    feeOut = protocol_fee_out1;
                 } else {
                     amountIn = amount1;
                     amountOut = out0;
-                    amount1 = protocol_fee_out1;
-                    amount2 = protocol_fee_out0;
+                    feeIn = protocol_fee_out1;
+                    feeOut = protocol_fee_out0;
                 }
                 emit_log_simple(FeesSwapped, begin_cell()
                                             .store_coins(amountIn)
@@ -173,8 +176,8 @@ const CrTenBurned = 0xc7b021ed;
                                             .end_cell()
                                             .begin_parse());
                 emit_log_simple(CrTenBurned, begin_cell()
-                                            .store_coins(amount1)
-                                            .store_coins(amount2)
+                                            .store_coins(feeIn)
+                                            .store_coins(feeOut)
                                             .end_cell()
                                             .begin_parse());
             }

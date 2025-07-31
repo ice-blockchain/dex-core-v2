@@ -9,7 +9,7 @@ import { BracketKeysType, BracketType, StorageParser } from '../libs/src/graph';
 import { expectBounced, expectEqAddress, expectNotBounced, getWalletContract, SLIM_CONFIG_LEGACY } from '../libs/src/test-helpers';
 import { LPAccount, lpAccStorageParser } from '../wrappers/LPAccount';
 import { LPWallet, lpWalletStorageParser } from '../wrappers/LPWallet';
-import { PoolBCI as Pool, poolBciStorageParser, defaultBCLPFee, defaultBCProtocolFee, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from '../wrappers/Pool';
+import { PoolBCI as Pool, poolBciStorageParser, defaultBCLPFee, defaultBCProtocolFee, defaultProtocolFeePCT, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from '../wrappers/Pool';
 import { RouterBCI as Router, crossSwapPayload, provideLpPayload, routerStorageParser, swapPayload } from '../wrappers/Router';
 import { Vault, vaultStorageParser } from '../wrappers/Vault';
 
@@ -306,6 +306,7 @@ describe('Bonding Curve Price swap', () => {
             defaultLPFee: defaultLPFee,
             defaultBCLPFee: defaultBCLPFee,
             defaultBCProtocolFee: defaultBCProtocolFee,
+            defaultProtocolFeePCT: defaultProtocolFeePCT,
             defaultExpACoeff: defaultACoeff,
             defaultExpBCoeff: defaultBCoeff,
             defaultBaseUSDRate: defaultBaseUSDRate,
@@ -931,14 +932,26 @@ describe('Bonding Curve Price swap', () => {
             }
 
             let poolData = await pool.getPoolData();
-
+            const poolTx = msgResult.transactions.find(tx => {
+                const poolAddressHashBigInt = BigInt('0x' + pool.address.hash.toString('hex'));
+                return tx.address === poolAddressHashBigInt; // This is a correct BigInt comparison
+            });
             if (params.expectBounce || params.expectRefund) {
                 if (params.expectBounce) {
                     expectBounced(msgResult.events);
+                    if (poolTx) {
+                        expect(poolTx.externals.length).toEqual(0);
+                    }
                 } else {
                     expectNotBounced(msgResult.events);
+                    if (poolTx) {
+                        if (params.customPayload) {
+                            expect(poolTx.externals.length).toEqual(2);
+                        } else {
+                            expect(poolTx.externals.length).toEqual(0);
+                        }
+                    }
                 }
-
                 if (!params.customPayload) {
                     let balance = await getWalletBalance(walletIn);
                     expect(balance).toEqual(oldBalanceIn);
@@ -952,7 +965,16 @@ describe('Bonding Curve Price swap', () => {
                 }
             } else {
                 expectNotBounced(msgResult.events);
-
+                if (poolTx) {
+                    const FeesSwapped = 0xfee53aed;
+                    const CrTenBurned = 0xc7b021ed;
+                    const logMessages = poolTx.externals.filter(ext => {
+                        const bodySlice = ext.body.beginParse();
+                        const eventId = bodySlice.loadUint(32);
+                        return eventId === FeesSwapped || eventId === CrTenBurned;
+                    });
+                    expect(logMessages.length).toEqual(2);
+                }
                 let balance = await getWalletBalance(walletIn);
                 expect(balance).toEqual(oldBalanceIn - BigInt(params.amountIn));
                 if (!params.customPayload) {
@@ -1317,7 +1339,7 @@ describe('Bonding Curve Price swap', () => {
             }
 
             const amountWithoutFee = (amountInToken1 * (10000n - poolData.bclpFee)) / 10000n;
-            const protocolFeeIn = poolData.bcprotocolFee * 5000n / 10000n;
+            const protocolFeeIn = poolData.bcprotocolFee * poolData.protocolFeePCT / 10000n;
             const amountIn = (amountWithoutFee * (10000n - protocolFeeIn)) / 10000n;
             const calcultedOut = toNano(calculateBondingCurveCTOut(
                 Number(fromNano(amountIn)),
@@ -1400,7 +1422,7 @@ describe('Bonding Curve Price swap', () => {
             }
 
             const amountWithoutFee = (amountInToken2 * (10000n - poolData.lpFee)) / 10000n;
-            const protocolFeeIn = poolData.protocolFee * 5000n / 10000n;
+            const protocolFeeIn = poolData.protocolFee * poolData.protocolFeePCT / 10000n;
             const amountIn = (amountWithoutFee * (10000n - protocolFeeIn)) / 10000n;
             const calcultedOut = toNano(calculateConstantProductCTOut(
                 Number(fromNano(reserveIn)),

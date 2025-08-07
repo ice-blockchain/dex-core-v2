@@ -90,7 +90,10 @@ export const routerOpcodes = {
     payTo: 0x657b54f5,
     vaultPayTo: 0x2100c922,
     getterPoolAddress: 0x2993ade0,
-    setParams: 0x2b8b3b62
+    setParams: 0x2b8b3b62,
+
+    setBondingCurveFees: 824992571,
+    setBondingCurvePrice: 1697024502
 } as const;
 
 export function provideLpPayload(opts: {
@@ -642,38 +645,162 @@ export class RouterSI extends RouterBase {
     }
 }
 
+export const defaultBaseUSDRate = 7000000000000000n;
+export const defaultBCLPFee = 10n; // in general it will be 0, let's have some for test
+export const defaultBCProtocolFee = 200n; // 2% fee
+export const defaultProtocolFeePCT = 5000n; // 50% in ION and 50% in Creator token
+
+export type RouterConfigBCI = {
+    id?: number;
+    isLocked: boolean;
+    adminAddress: Address;
+    lpWalletCode: Cell;
+    poolCode: Cell;
+    lpAccountCode: Cell;
+    vaultCode: Cell;
+    upgradePoolCode?: Cell;
+    lpFee?: bigint;
+    protocolFee?: bigint;
+    bclpFee?: bigint;
+    bcprotocolFee?: bigint;
+    protocolFeePCT?: bigint;
+    baseUSDRate?: bigint;
+};
+
+export function routerStorageParserBCI(src: Cell) {
+    let ds = src.beginParse()
+    return {
+        isLocked: ds.loadBoolean(),
+        admin: ds.loadAddress(),
+        lpFee: ds.loadUint(16),
+        protocolFee: ds.loadUint(16),
+        bclpFee: ds.loadUint(16),
+        bcprotocolFee: ds.loadUint(16),
+        protocolFeePCT: ds.loadUint(16),
+        baseUSDRate: ds.loadCoins(),
+        ...(() => {
+            let ds_p = ds.loadRef().beginParse()
+            return {
+                codeEnd: ds_p.loadUintBig(64),
+                adminEnd: ds_p.loadUintBig(64),
+                poolEnd: ds_p.loadUintBig(64),
+                newAdmin: ds_p.loadMaybeAddress(),
+                newCode: emptyCell().equals(ds_p.loadRef()) ? false : true,
+                newPoolCode: emptyCell().equals(ds_p.loadRef()) ? false : true
+            }
+        })(),
+        ...(() => {
+            let ds_p = ds.loadRef().beginParse()
+            return {
+                id: ds_p.loadUintBig(64),
+                lpWalletCode: cellToBocStr(ds_p.loadRef()),
+                poolCode: cellToBocStr(ds_p.loadRef()),
+                lpAccCode: cellToBocStr(ds_p.loadRef()),
+                vaultCode: cellToBocStr(ds_p.loadRef()),
+            }
+        })(),
+        upgradePoolCode: cellToBocStr(ds.loadRef()),
+    }
+}
+
+export function routerBCIConfigToCell(config: RouterConfigBCI): Cell {
+    return beginCell()
+        .storeUint(config.isLocked ? 1 : 0, 1)
+        .storeAddress(config.adminAddress)
+        .storeUint(config.lpFee ?? 20, 16)
+        .storeUint(config.protocolFee ?? 10, 16)
+        .storeUint(config.bclpFee ?? defaultBCLPFee, 16)
+        .storeUint(config.bcprotocolFee ?? defaultBCProtocolFee, 16)
+        .storeUint(config.protocolFeePCT ?? defaultProtocolFeePCT, 16)
+        .storeCoins(config.baseUSDRate ?? defaultBaseUSDRate)
+        .storeRef(beginCell()
+            .storeUint(0n, 64)
+            .storeUint(0n, 64)
+            .storeUint(0n, 64)
+            .storeAddress(null)
+            .storeRef(emptyCell())
+            .storeRef(emptyCell())
+            .endCell())
+        .storeRef(beginCell()
+            .storeUint(config.id ?? 0, 64)
+            .storeRef(config.lpWalletCode)
+            .storeRef(config.poolCode)
+            .storeRef(config.lpAccountCode)
+            .storeRef(config.vaultCode)
+            .endCell())
+        .storeRef(config.upgradePoolCode ?? emptyCell())
+        .endCell();
+}
+
 export class RouterBCI extends RouterBase {
-    static createFromConfig(config: RouterConfig, code: Cell, workchain = 0) {
-        return this.createFromConfigBase(config, routerConfigToCell, code, workchain)
+    static createFromConfig(config: RouterConfigBCI, code: Cell, workchain = 0) {
+        return this.createFromConfigBase(config, routerBCIConfigToCell, code, workchain)
     }
 
-    async sendSetParams(provider: ContractProvider, via: Sender, opts: {
-        bclpFee?: bigint;
-        bcprotocolFee?: bigint;
-        baseUSDRate?: bigint;
-        leftWalletAddress: Address;
-        rightWalletAddress: Address;
-        excessesRecipient?: Address;
+    async sendSetBondingCurveFees(provider: ContractProvider, via: Sender, opts: {
+        lpFee: bigint;
+        protocolFee: bigint;
+        bclpFee: bigint;
+        bcprotocolFee: bigint;
+        protocolFeePCT: bigint;
     }, value?: bigint) {
-        let fee = beginCell();
-        if (opts.bclpFee != null && opts.bcprotocolFee != null) {
-            fee.storeUint(opts.bclpFee, 16)
-               .storeUint(opts.bcprotocolFee, 16);
-        }
-        let baseUSDRate = beginCell();
-        if (opts.baseUSDRate != null) {
-            baseUSDRate.storeUint(opts.baseUSDRate, 53);
-        }
         await provider.internal(via, {
             value: value || DefaultValues.DEFAULT_MSG_VALUE,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginMessage(routerOpcodes.setParams)
-                .storeRef(fee.endCell())
-                .storeRef(baseUSDRate.endCell())
-                .storeAddress(opts.leftWalletAddress)
-                .storeAddress(opts.rightWalletAddress)
-                .storeAddress(opts.excessesRecipient || null)
-                .endCell(),
+            body: beginMessage(routerOpcodes.setBondingCurveFees)
+            .storeUint(opts.lpFee, 16)
+            .storeUint(opts.protocolFee, 16)
+            .storeUint(opts.bclpFee, 16)
+            .storeUint(opts.bcprotocolFee, 16)
+            .storeUint(opts.protocolFeePCT, 16)
+            .endCell(),
         });
+    }
+
+    async sendSetBondingCurvePrice(provider: ContractProvider, via: Sender, opts: {
+        baseUSDRate: bigint;
+    }, value?: bigint) {
+        await provider.internal(via, {
+            value: value || DefaultValues.DEFAULT_MSG_VALUE,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginMessage(routerOpcodes.setBondingCurvePrice)
+            .storeCoins(opts.baseUSDRate)
+            .endCell(),
+        });
+    }
+
+    async getRouterData(provider: ContractProvider) {
+        const result = await provider.get('get_router_data', []);
+
+        let res1 = {
+            id: result.stack.readNumber(),
+            type: result.stack.readString(),
+            isLocked: result.stack.readBoolean(),
+            adminAddress: result.stack.readAddress(),
+            lpFee: result.stack.readBigNumber(),
+            protocolFee: result.stack.readBigNumber(),
+            bclpFee: result.stack.readBigNumber(),
+            bcprotocolFee: result.stack.readBigNumber(),
+            protocolFeePCT: result.stack.readBigNumber(),
+            baseUSDRate: result.stack.readBigNumber(),
+            tmpUpgradeCache: result.stack.readCell(),
+            poolCode: result.stack.readCell(),
+            jettonLPWalletCode: result.stack.readCell(),
+            LPAccountCode: result.stack.readCell()
+        };
+
+        let sc = res1.tmpUpgradeCache.beginParse()
+        let res2 = {
+            endCode: sc.loadUintBig(64),
+            endAdmin: sc.loadUintBig(64),
+            endPool: sc.loadUintBig(64),
+            pendingNewAdmin: sc.loadMaybeAddress(),
+            pendingCode: sc.loadRef(),
+            pendingPoolCode: sc.loadRef()
+        }
+        return {
+            ...res1,
+            ...res2
+        }
     }
 }

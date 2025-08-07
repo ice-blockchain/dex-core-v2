@@ -8,6 +8,10 @@ const gas::router::reset_pool_gas = 20000000;
 const gas::router::update_pool_status = 20000000;
 const gas::router::set_params = 20000000;
 const gas::router::update_pool_code = 20000000;
+<% if (bondingCurve) {
+print(`const gas::router::set_bonding_curve_fees = 20000000;`);
+print(`const gas::router::set_bonding_curve_price = 20000000;`);
+} %>
 
 const gas::pool::cb_refund = 15000000;
 const gas::pool::provide_lp = 16000000;

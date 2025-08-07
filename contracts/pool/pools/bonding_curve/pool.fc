@@ -1,12 +1,18 @@
 
 const error::unauthorized_swap_address = 5108;
 
+global slice router_settings;
+
 (int, int, int, int) pool::get_swap_out(int _side, int _ref_value, int _amount_in, int _reserve_in, int _reserve_out) inline {
     int protocol_fee_out = 0;
     int protocol_fee_in = 0;
     int ref_fee_out = 0;
-    int lp_fee = storage::lp_fee;
-    int protocol_fee = storage::protocol_fee;
+    int lp_fee = router_settings~load_uint(16);
+    int protocol_fee = router_settings~load_uint(16);
+    int bc_lp_fee = router_settings~load_uint(16);
+    int bc_protocol_fee = router_settings~load_uint(16);
+    int protocol_fee_pct = router_settings~load_uint(16);
+    int base_usd_rate = router_settings~load_coins();
 
     if (storage::ct_for_curve_phase != 0) {
         if ((storage::bc_swap_address_expiration >= now()) & (storage::bc_swap_address.preload_uint(2) != 0)) {
@@ -14,20 +20,20 @@ const error::unauthorized_swap_address = 5108;
             slice sender = in_msg_body~load_msg_addr();
             throw_unless(error::unauthorized_swap_address, equal_slices(sender, storage::bc_swap_address));
         }
-        lp_fee = storage::bc_lp_fee;
-        protocol_fee = storage::bc_protocol_fee;
+        lp_fee = bc_lp_fee;
+        protocol_fee = bc_protocol_fee;
     }
 
     ;; LP fee paid in in_token
     int base_in_without_lp_fee = muldiv(_amount_in, (params::fee_divider - lp_fee), params::fee_divider);
 
     if protocol_fee > 0 {
-        protocol_fee_in = muldiv(protocol_fee, storage::protocol_fee_pct, params::fee_divider);
+        protocol_fee_in = muldiv(protocol_fee, protocol_fee_pct, params::fee_divider);
         protocol_fee -= protocol_fee_in;
     }
 
     int base_in_without_fee = muldiv(base_in_without_lp_fee, (params::fee_divider - protocol_fee_in), params::fee_divider);
-    int base_out = calc_out_given_in(_reserve_in, base_in_without_fee, _reserve_out);
+    int base_out = calc_out_given_in(_reserve_in, base_in_without_fee, _reserve_out, base_usd_rate);
 
     ;; pay other fees in out_token
     if protocol_fee > 0 {

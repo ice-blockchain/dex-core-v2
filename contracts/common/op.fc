@@ -33,6 +33,10 @@ const op::internal_update_pool_code       = "internal_update_pool_code query_id:
 const op::init_pool_code_upgrade          = "init_pool_code_upgrade query_id:uint64 new_pool_code:^Cell = InternalMsgBody"c & 0x7fffffff;
 const op::cancel_pool_code_upgrade        = "cancel_pool_code_upgrade query_id:uint64 = InternalMsgBody"c & 0x7fffffff;
 
+;; only in Bonding Curve router
+const op::set_bonding_curve_fees          = "set_bonding_curve_fees query_id:uint64 new_lp_fee:uint16 new_protocol_fee:uint16 new_bc_lp_fee:uint16 new_bc_protocol_fee:uint16 new_protocol_fee_pct:uint16 = InternalMsgBody"c & 0x7fffffff;
+const op::set_bonding_curve_price         = "set_bonding_curve_price query_id:uint64 new_base_usd_rate:Coins = InternalMsgBody"c & 0x7fffffff;
+
 ;; async "get" calls
 const op::getter_lp_account_data          = "getter_lp_account_data query_id:uint64 = InternalMsgBody"c & 0x7fffffff;
 const op::getter_pool_data                = "getter_pool_data query_id:uint64 = InternalMsgBody"c & 0x7fffffff;

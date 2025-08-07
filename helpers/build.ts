@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { compileX } from "../libs/";
 import { POOL_TYPES, preprocBuildContractsLocal } from "./helpers";
-import { defaultBCLPFee, defaultBCProtocolFee, defaultProtocolFeePCT, defaultACoeff, defaultBCoeff, defaultBaseUSDRate, defautlCurveT } from "../wrappers/Pool"
+import { defaultACoeff, defaultBCoeff, defautlCurveT } from "../wrappers/Pool"
 
 (async () => {
     let autocleanup = undefined;
@@ -16,12 +16,8 @@ import { defaultBCLPFee, defaultBCProtocolFee, defaultProtocolFeePCT, defaultACo
             defaultIsLocked: null,
             defaultLPFee: null,
             autocleanup: autocleanup,
-            defaultBCLPFee: tp == "bonding_curve" ? defaultBCLPFee : undefined,
-            defaultBCProtocolFee: tp == "bonding_curve" ? defaultBCProtocolFee : undefined,
-            defaultProtocolFeePCT: tp == "bonding_curve" ? defaultProtocolFeePCT : undefined,
             defaultExpACoeff: tp == "bonding_curve" ? defaultACoeff : undefined,
             defaultExpBCoeff: tp == "bonding_curve" ? defaultBCoeff : undefined,
-            defaultBaseUSDRate: tp == "bonding_curve" ? defaultBaseUSDRate : undefined,
             defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurveT : undefined,
             defaultSwapAddress: tp == "bonding_curve" ? "0, 0" : undefined,
             defaultSwapAddressExpirationTime: tp == "bonding_curve" ? 60000n : undefined,

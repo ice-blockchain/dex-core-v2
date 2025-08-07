@@ -80,6 +80,20 @@
             storage::pool_code
         );
 
+<% if (bondingCurve) {
+        print(`if transferred_op == op::swap { `);
+        print(`_dex_payload = begin_cell()`);
+        print(`.store_slice(_dex_payload.begin_parse())`);
+        print(`.store_ref(begin_cell()`);
+        print(`.store_uint(storage::lp_fee, 16)`);
+        print(`.store_uint(storage::protocol_fee, 16)`);
+        print(`.store_uint(storage::bc_lp_fee, 16)`);
+        print(`.store_uint(storage::bc_protocol_fee, 16)`);
+        print(`.store_uint(storage::protocol_fee_pct, 16)`);
+        print(`.store_coins(storage::base_usd_rate)`);
+        print(`.end_cell()).end_cell(); }`);
+} %>
+
         reserves::max_balance(storage_fee::router);
         msgs::send_with_stateinit(
             0, 

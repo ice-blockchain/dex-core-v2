@@ -37,6 +37,14 @@ _ get_router_data() method_id {
         "<%= dexType %>",
         storage::is_locked,
         storage::admin_address,
+<% if (bondingCurve) {
+    print(`storage::lp_fee,`);
+    print(`storage::protocol_fee,`);
+    print(`storage::bc_lp_fee,`);
+    print(`storage::bc_protocol_fee,`);
+    print(`storage::protocol_fee_pct,`);
+    print(`storage::base_usd_rate,`);
+}%>
         storage::temp_upgrade,
         storage::pool_code,
         storage::jetton_lp_wallet_code,

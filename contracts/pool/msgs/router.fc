@@ -64,7 +64,9 @@ const CrTenBurned = 0xc7b021ed;
                 to_address.address::check_workchain(params::workchain)
                 & ref_address.address::check_workchain_nofail(params::workchain)
             );
-        
+<% if (bondingCurve) {
+            print(`router_settings = dex_payload~load_slice_ref();`);
+}%>
             call_payload.end_parse();
             dex_payload.end_parse();
         } catch(err_arg, err_code) {

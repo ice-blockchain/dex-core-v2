@@ -8,13 +8,30 @@ global cell storage::temp_upgrade;
 global cell storage::vault_code;
 global cell storage::upgrade_pool_code;
 global cell storage::_static;
+<% if (bondingCurve) {
+    print(`global int storage::lp_fee;`);
+    print(`global int storage::protocol_fee;`);
+    print(`global int storage::bc_lp_fee;`);
+    print(`global int storage::bc_protocol_fee;`);
+    print(`global int storage::protocol_fee_pct;`);
+    print(`global int storage::base_usd_rate;`);
+} %>
 
 () storage::load() impure inline {
     slice ds = get_data().begin_parse();
     storage::is_locked = ds~load_bool();
     storage::admin_address = ds~load_msg_addr();
-    storage::temp_upgrade = ds~load_ref();
 
+<% if (bondingCurve) {
+    print(`storage::lp_fee = ds~load_uint(16);`);
+    print(`storage::protocol_fee = ds~load_uint(16);`);
+    print(`storage::bc_lp_fee = ds~load_uint(16);`);
+    print(`storage::bc_protocol_fee = ds~load_uint(16);`);
+    print(`storage::protocol_fee_pct = ds~load_uint(16);`);
+    print(`storage::base_usd_rate = ds~load_coins();`);
+} %>
+
+    storage::temp_upgrade = ds~load_ref();
     storage::_static = ds~load_ref();
     slice ds_0 = storage::_static.begin_parse();
     storage::id = ds_0~load_uint64();
@@ -23,7 +40,7 @@ global cell storage::_static;
     storage::lp_account_code = ds_0~load_ref();
     storage::vault_code = ds_0~load_ref();
     ds_0.end_parse();
-    
+
     storage::upgrade_pool_code = ds~load_ref();
     ds.end_parse();
 }
@@ -32,6 +49,14 @@ global cell storage::_static;
     set_data(begin_cell()
         .store_bool(storage::is_locked)
         .store_slice(storage::admin_address)
+<% if (bondingCurve) {
+    print(`.store_uint(storage::lp_fee, 16)`);
+    print(`.store_uint(storage::protocol_fee, 16)`);
+    print(`.store_uint(storage::bc_lp_fee, 16)`);
+    print(`.store_uint(storage::bc_protocol_fee, 16)`);
+    print(`.store_uint(storage::protocol_fee_pct, 16)`);
+    print(`.store_coins(storage::base_usd_rate)`);
+} %>
         .store_ref(storage::temp_upgrade)
         .store_ref(storage::_static)
         .store_ref(storage::upgrade_pool_code)

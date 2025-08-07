@@ -1,5 +1,9 @@
 ;; messages from admin
 
+() check_fee(int fee) impure inline_ref {
+    throw_unless(error::fee_out_range, (params::min_fee <= fee) & (fee <= params::max_fee));
+}
+
 (int) handle_admin_messages() impure inline {
     slice in_msg_body = ctx.at(BODY);
 
@@ -265,6 +269,38 @@
         utils::send_excesses(0, storage::admin_address, QCARRY_ALL_BALANCE);
         return (true);
     }
+
+<% if (bondingCurve) {
+        print(`if ctx.at(OPCODE) == op::set_bonding_curve_fees { `);
+        print(`throw_unless(error::insufficient_gas, ctx.at(MSG_VALUE) > ctx.at(FWD_FEE) * 2 + storage_fee::router + gas::router::set_bonding_curve_fees);`);
+        print(`int new_lp_fee = in_msg_body~load_uint16();`);
+        print(`int new_protocol_fee = in_msg_body~load_uint16();`);
+        print(`int new_bc_lp_fee = in_msg_body~load_uint16();`);
+        print(`int new_bc_protocol_fee = in_msg_body~load_uint16();`);
+        print(`int new_protocol_fee_pct = in_msg_body~load_uint16();`);
+        print(`check_fee(new_lp_fee);`);
+        print(`check_fee(new_protocol_fee);`);
+        print(`check_fee(new_bc_lp_fee);`);
+        print(`check_fee(new_bc_protocol_fee);`);
+        print(`throw_unless(error::invalid_amount, (new_protocol_fee_pct > 0) & (new_protocol_fee_pct < params::fee_divider));`);
+        print(`storage::lp_fee = new_lp_fee;`);
+        print(`storage::protocol_fee = new_protocol_fee;`);
+        print(`storage::bc_lp_fee = new_bc_lp_fee;`);
+        print(`storage::bc_protocol_fee = new_bc_protocol_fee;`);
+        print(`storage::protocol_fee_pct = new_protocol_fee_pct;`);
+        print(`storage::save();`);
+        print(`reserves::max_balance(storage_fee::router);`);
+        print(`return (true); } `);
+
+        print(`if ctx.at(OPCODE) == op::set_bonding_curve_price { `);
+        print(`throw_unless(error::insufficient_gas, ctx.at(MSG_VALUE) > ctx.at(FWD_FEE) * 2 + storage_fee::router + gas::router::set_bonding_curve_price);`);
+        print(`int new_base_usd_rate = in_msg_body~load_coins();`);
+        print(`throw_unless(error::invalid_amount, new_base_usd_rate > 0);`);
+        print(`storage::base_usd_rate = new_base_usd_rate;`);
+        print(`storage::save();`);
+        print(`reserves::max_balance(storage_fee::router);`);
+        print(`return (true); } `);
+} %>
 
     <%
     if (renderRouterAdminExtCalls) {

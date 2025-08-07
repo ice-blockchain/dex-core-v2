@@ -24,16 +24,10 @@
             .store_coins(0) ;; storage::collected_token0_protocol_fee
             .store_coins(0) ;; storage::collected_token1_protocol_fee
             .store_uint(0, 2)   ;; storage::protocol_fee_address
-            .store_uint(<%= defaultLPFee %>, 16)  ;; storage::lp_fee
-            .store_uint(<%= defaultProtocolFee %>, 16)  ;; storage::protocol_fee
             .end_cell())
         .store_ref(begin_cell()
-            .store_uint(<%= defaultBCLPFee %>, 16)  ;; storage::bc_lp_fee
-            .store_uint(<%= defaultBCProtocolFee %>, 16)  ;; storage::bc_protocol_fee
-            .store_uint(<%= defaultProtocolFeePCT %>, 16) ;; storage::protocol_fee_pct
             .store_uint(<%= defaultExpACoeff %>, <%= calcExpACoeffSize %>)
             .store_uint(<%= defaultExpBCoeff %>, <%= calcExpBCoeffSize %>)
-            .store_uint(<%= defaultBaseUSDRate %>, <%= calcBaseUSDRateSize %>)
             .store_coins(<%= defaultCTokenForCurve %>)
             .store_slice(to_std_address(<%= defaultSwapAddress %>))
             .store_uint(0, 32)

@@ -10,10 +10,9 @@ int _invariant(int _left_balance, int _right_balance) impure inline {
     return math::fp::mul(_left_balance, _right_balance);
 }
 
-(int) _get_current_bonding_curve_price(int amount_in_fp, int s1_ct_sold_fp) impure inline {
+(int) _get_current_bonding_curve_price(int amount_in_fp, int s1_ct_sold_fp, int base_usd_rate_fp) impure inline {
     int A_coeff = storage::exp_A_coeff;
     int B_coeff = storage::exp_B_coeff;
-    int base_usd_rate_fp = storage::base_usd_rate;
 
     throw_if(error::df_zero, A_coeff == 0); ;; A should not be zero for the curve
 
@@ -50,7 +49,7 @@ int _invariant(int _left_balance, int _right_balance) impure inline {
     return amount_out_ct;
 }
 
-int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline {
+int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out, int base_usd_rate) inline {
 
     if (storage::ct_for_curve_phase > 0) { ;; === Bonding Curve Phase ===
         if (storage::ct_for_curve_phase < 100) {
@@ -62,7 +61,7 @@ int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out) inline 
         _amount_in = _amount_in * ONE_GRAM;
         int ct_for_curve_phase = storage::ct_for_curve_phase * ONE_GRAM;
 
-        int base_out = _get_current_bonding_curve_price(_amount_in, _balance_out);
+        int base_out = _get_current_bonding_curve_price(_amount_in, _balance_out, base_usd_rate);
         if (ct_for_curve_phase >= _balance_out - base_out) {
             storage::ct_for_curve_phase = 0;
         }

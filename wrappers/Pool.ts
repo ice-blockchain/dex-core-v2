@@ -891,15 +891,10 @@ export class PoolStable extends PoolBase {
 export const defautlCurveT = 80n;
 export const defaultACoeff = 1105000000000n;
 export const defaultBCoeff = 7056000000n;
-export const defaultBaseUSDRate = 7000000000000000n;
-export const defaultBCLPFee = 10n; // in general it will be 0, let's have some for test
-export const defaultBCProtocolFee = 200n; // 2% fee
-export const defaultProtocolFeePCT = 5000n; // 50% in ION and 50% in Creator token
 
-export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcprotocolFee?: bigint, protocolFeePCT?: bigint, expACoeff?: bigint, expBCoeff?: bigint, baseUSDRate?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
+export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, expBCoeff?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
     let expACoeff = config.expACoeff ?? defaultACoeff;
     let expBCoeff = config.expBCoeff ?? defaultBCoeff;
-    let baseUSDRate = config.baseUSDRate ?? defaultBaseUSDRate;
     let ctokenToCurveT = config.ctokenToCurveT ?? defautlCurveT;
     return beginCell()
         .storeUint(1, 1)
@@ -910,16 +905,10 @@ export function bciPoolConfigToCell(config: PoolConfig & { bclpFee?: bigint, bcp
             .storeCoins(config.collectedLeftJettonProtocolFees)
             .storeCoins(config.collectedRightJettonProtocolFees)
             .storeAddress(config.protocolFeeAddress)
-            .storeUint(config.lpFee, 16)
-            .storeUint(config.protocolFee, 16)
             .endCell())
         .storeRef(beginCell()
-            .storeUint(config.bclpFee ?? defaultBCLPFee, 16)
-            .storeUint(config.bcprotocolFee ?? defaultBCProtocolFee, 16)
-            .storeUint(config.protocolFeePCT ?? defaultProtocolFeePCT, 16)
             .storeUint(expACoeff, expACoeff.toString(2).length)
             .storeUint(expBCoeff, expBCoeff.toString(2).length)
-            .storeUint(baseUSDRate, baseUSDRate.toString(2).length)
             .storeCoins(ctokenToCurveT)
             .storeAddress(config.swapAddress)
             .storeUint(0, 32)
@@ -947,19 +936,13 @@ export function poolBciStorageParser(src: Cell) {
                 collectedToken0ProtocolFee: ds_p.loadCoins(),
                 collectedToken1ProtocolFee: ds_p.loadCoins(),
                 protocolFeeAddress: ds_p.loadMaybeAddress(),
-                lpFee: ds_p.loadUintBig(16),
-                protocolFee: ds_p.loadUintBig(16),
             }
         })(),
         ...(() => {
             let ds_p = ds.loadRef().beginParse()
             return {
-                bclpFee: ds_p.loadUintBig(16),
-                bcprotocolFee: ds_p.loadUintBig(16),
-                protocolFeePCT: ds_p.loadUintBig(16),
                 expACoeff: ds_p.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
                 expBCoeff: ds_p.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
-                baseUSDRate: ds_p.loadUintBig(defaultBaseUSDRate.toString(2).length), // in tests only, it's dynamically
                 ctokenToCurveT: ds_p.loadCoins(),
                 swapAddress: ds_p.loadMaybeAddress(),
                 swapAddressExiration: ds_p.loadUintBig(32),
@@ -998,17 +981,11 @@ export class PoolBCI extends PoolBase {
             rightReserve: result.stack.readBigNumber(),
             leftJettonAddress: result.stack.readAddress(),
             rightJettonAddress: result.stack.readAddress(),
-            lpFee: result.stack.readBigNumber(),
-            protocolFee: result.stack.readBigNumber(),
-            bclpFee: result.stack.readBigNumber(),
-            bcprotocolFee: result.stack.readBigNumber(),
-            protocolFeePCT: result.stack.readBigNumber(),
             protocolFeeAddress: result.stack.readAddressOpt(),
             collectedLeftJettonProtocolFees: result.stack.readBigNumber(),
             collectedRightJettonProtocolFees: result.stack.readBigNumber(),
             coefficientA: result.stack.readBigNumber(),
             coefficientB: result.stack.readBigNumber(),
-            baseUSDRate: result.stack.readBigNumber(),
             tokenCurveT: result.stack.readBigNumber(),
             swapAddress: result.stack.readAddressOpt(),
             swapAddressExiration: result.stack.readBigNumber(),
@@ -1024,17 +1001,11 @@ export class PoolBCI extends PoolBase {
             rightReserve: 0n,
             leftJettonAddress: HOLE_ADDRESS,
             rightJettonAddress: HOLE_ADDRESS,
-            lpFee: 0n,
-            protocolFee: 0n,
-            bclpFee: 0n,
-            bcprotocolFee: 0n,
-            protocolFeePCT: 0n,
             protocolFeeAddress: HOLE_ADDRESS as Address | null,
             collectedLeftJettonProtocolFees: 0n,
             collectedRightJettonProtocolFees: 0n,
             coefficientA: defaultACoeff,
             coefficientB: defaultBCoeff,
-            baseUSDRate: defaultBaseUSDRate,
             tokenCurveT: defautlCurveT,
             swapAddress: HOLE_ADDRESS as Address | null,
             swapAddressExiration: 0n,

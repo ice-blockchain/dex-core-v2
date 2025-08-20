@@ -19,6 +19,7 @@ import { defaultACoeff, defaultBCoeff, defautlCurveT } from "../wrappers/Pool"
             defaultExpACoeff: tp == "bonding_curve" ? defaultACoeff : undefined,
             defaultExpBCoeff: tp == "bonding_curve" ? defaultBCoeff : undefined,
             defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurveT : undefined,
+            defaultCreatorAddress: tp == "bonding_curve" ? "0, 0" : undefined,
             defaultSwapAddress: tp == "bonding_curve" ? "0, 0" : undefined,
             defaultSwapAddressExpirationTime: tp == "bonding_curve" ? 60000n : undefined,
         };

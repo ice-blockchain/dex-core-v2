@@ -263,6 +263,16 @@ const calculateConstantProductCTOut = (
     return balanceOut * complementOfBase;
 }
 
+async function addressIsBigger(bc: Blockchain, jetton1: SBCtrJettonMinter, jetton2: SBCtrJettonMinter, router: Address) {
+    let routerWallet1 = await getWalletContract(bc, jetton1, router);
+    let routerWallet2 = await getWalletContract(bc, jetton2, router);
+    const routerWallet1Hash = beginCell().storeAddress(routerWallet1.address).endCell().hash();
+    const routerWallet2Hash = beginCell().storeAddress(routerWallet2.address).endCell().hash();
+    const routerWallet1HashInt = BigInt('0x' + Buffer.from(routerWallet1Hash).toString('hex'));
+    const routerWallet2HashInt = BigInt('0x' + Buffer.from(routerWallet2Hash).toString('hex'));
+    return routerWallet1HashInt > routerWallet2HashInt;
+}
+
 const defaultLPFee = 20;
 const defaultProtocolFee = 10;
 
@@ -306,7 +316,9 @@ describe('Bonding Curve Price swap', () => {
         setFromInitTimestamp(0);
 
         deployer = await bc.treasury('deployer');
+        bob = await bc.treasury('bob');
         const sender = deployer.address;
+        const creator = bob.address;
 
         preprocBuildContractsLocal({
             dexType: "bonding_curve",
@@ -316,6 +328,7 @@ describe('Bonding Curve Price swap', () => {
             defaultExpACoeff: defaultACoeff,
             defaultExpBCoeff: defaultBCoeff,
             defaultCTokenForCurve: defautlCurveT,
+            defaultCreatorAddress: `${creator.workChain}, 0x${creator.hash.toString('hex')}`,
             defaultSwapAddress: `${sender.workChain}, 0x${sender.hash.toString('hex')}`,
             defaultSwapAddressExpirationTime: 100n,
         });
@@ -877,23 +890,35 @@ describe('Bonding Curve Price swap', () => {
             let oldPoolJData = await pool.getJettonData();
 
             const refFee = params.referral ? (params.refFee ?? 10n) : 0n;
-            const minAmountOut = 1n;
+            const minAmountOut = params.minAmountOut ?? 1n;
+
+            // fromNative is false
+            let tokenFee;
+            if (await addressIsBigger(bc, params.tokenIn, params.tokenOut, router.address)) {
+                tokenFee = params.tokenIn;
+            } else {
+                tokenFee = params.tokenOut;
+            }
 
             let walletIn = await getWalletContract(bc, params.tokenIn, sender.address);
             let walletOut = await getWalletContract(bc, params.tokenOut, sender.address);
             let oldBalanceIn = await getWalletBalance(walletIn);
             let oldBalanceOut = await getWalletBalance(walletOut);
+            let holeAddressIn = await getWalletContract(bc, tokenFee, HOLE_ADDRESS);
+            let oldHoleAddressIn = await getWalletBalance(holeAddressIn);
+            let bobAddressIn = await getWalletContract(bc, tokenFee, bob.address);
+            let oldBobBalanceIn = await getWalletBalance(bobAddressIn);
 
             let msgResult = await walletIn.sendTransfer(sender.getSender(), {
-                value: params.gas ?? toNano(2),
+                value: params.gas ?? toNano(3),
                 jettonAmount: params.amountIn,
                 toAddress: router.address,
                 responseAddress: sender.address,
-                fwdAmount: params.fwdGas ?? toNano("1"),
+                fwdAmount: params.fwdGas ?? toNano("2"),
                 fwdPayload: swapPayload({
                     otherTokenWallet: routerWalletOut.address,
                     receiver: sender.address,
-                    minOut: params.minAmountOut ?? minAmountOut,
+                    minOut: minAmountOut,
                     fwdGas: 0n,
                     refFee: params.refFee,
                     refAddress: params.referral?.address,
@@ -951,7 +976,7 @@ describe('Bonding Curve Price swap', () => {
                     expectNotBounced(msgResult.events);
                     if (poolTx) {
                         if (params.customPayload) {
-                            expect(poolTx.externals.length).toEqual(2);
+                            expect(poolTx.externals.length).toEqual(1);
                         } else {
                             expect(poolTx.externals.length).toEqual(0);
                         }
@@ -962,26 +987,37 @@ describe('Bonding Curve Price swap', () => {
                     expect(balance).toEqual(oldBalanceIn);
                     balance = await getWalletBalance(walletOut);
                     expect(balance).toEqual(oldBalanceOut);
+                    balance = await getWalletBalance(holeAddressIn);
+                    expect(balance).toEqual(oldHoleAddressIn);
+                    balance = await getWalletBalance(bobAddressIn);
+                    expect(balance).toEqual(oldBobBalanceIn);
                 } else {
                     let balance = await getWalletBalance(walletIn);
                     expect(balance).toEqual(oldBalanceIn - BigInt(params.amountIn));
                     balance = await getWalletBalance(walletOut);
                     expect(balance).toBeGreaterThanOrEqual(oldBalanceOut + minAmountOut);
+                    balance = await getWalletBalance(holeAddressIn);
+                    expect(balance).toBeGreaterThan(oldHoleAddressIn);
+                    balance = await getWalletBalance(bobAddressIn);
+                    expect(balance).toBeGreaterThan(oldBobBalanceIn);
                 }
             } else {
                 expectNotBounced(msgResult.events);
                 if (poolTx) {
                     const FeesSwapped = 0xfee53aed;
-                    const CrTenBurned = 0xc7b021ed;
                     const logMessages = poolTx.externals.filter(ext => {
                         const bodySlice = ext.body.beginParse();
                         const eventId = bodySlice.loadUint(32);
-                        return eventId === FeesSwapped || eventId === CrTenBurned;
+                        return eventId === FeesSwapped;
                     });
-                    expect(logMessages.length).toEqual(2);
+                    expect(logMessages.length).toEqual(1);
                 }
                 let balance = await getWalletBalance(walletIn);
                 expect(balance).toEqual(oldBalanceIn - BigInt(params.amountIn));
+                balance = await getWalletBalance(bobAddressIn);
+                expect(balance).toBeGreaterThan(oldBobBalanceIn);
+                balance = await getWalletBalance(holeAddressIn);
+                expect(balance).toBeGreaterThan(oldHoleAddressIn);
                 if (!params.customPayload) {
                     balance = await getWalletBalance(walletOut);
                     expect(balance).toBeGreaterThanOrEqual(oldBalanceOut + minAmountOut);
@@ -1043,16 +1079,16 @@ describe('Bonding Curve Price swap', () => {
             let oldBalanceFinal = await getWalletBalance(walletFinal);
 
             let msgResult = await walletIn.sendTransfer(sender.getSender(), {
-                value: params.gas ?? toNano(3),
+                value: params.gas ?? toNano(5),
                 jettonAmount: params.amountIn,
                 toAddress: router.address,
                 responseAddress: sender.address,
-                fwdAmount: params.fwdGas ?? toNano("2"),
+                fwdAmount: params.fwdGas ?? toNano("4"),
                 fwdPayload: swapPayload({
                     otherTokenWallet: routerWalletMid.address,
                     receiver: router2.address,
                     minOut: params.minAmountOut1 ?? 1n,
-                    fwdGas: params.fwdGas2 ?? toNano("1"),
+                    fwdGas: params.fwdGas2 ?? toNano("2"),
                     refAddress: params.referral?.address,
                     refFee: params.refFee,
                     refundAddress: sender.address,
@@ -1337,15 +1373,6 @@ describe('Bonding Curve Price swap', () => {
     });
 
     describe('Swap Price and Reserve-Based Restrictions', () => {
-        async function addressIsBigger(jetton1: SBCtrJettonMinter, jetton2: SBCtrJettonMinter, router: Address) {
-            let routerWallet1 = await getWalletContract(bc, jetton1, router);
-            let routerWallet2 = await getWalletContract(bc, jetton2, router);
-            const routerWallet1Hash = beginCell().storeAddress(routerWallet1.address).endCell().hash();
-            const routerWallet2Hash = beginCell().storeAddress(routerWallet2.address).endCell().hash();
-            const routerWallet1HashInt = BigInt('0x' + Buffer.from(routerWallet1Hash).toString('hex'));
-            const routerWallet2HashInt = BigInt('0x' + Buffer.from(routerWallet2Hash).toString('hex'));
-            return routerWallet1HashInt > routerWallet2HashInt;
-        }
         it('should swap token2 for token1 and verify price', async () => {
             let setup = await setupDex({
                 createPool: {
@@ -1358,7 +1385,7 @@ describe('Bonding Curve Price swap', () => {
             const amountInToken1 = toNano(10);
 
             let reserveOut;
-            if (await addressIsBigger(setup.token1, setup.token2, setup.router.address)) {
+            if (await addressIsBigger(bc, setup.token1, setup.token2, setup.router.address)) {
                 reserveOut = poolData.rightReserve;
             } else {
                 reserveOut = poolData.leftReserve;
@@ -1386,6 +1413,7 @@ describe('Bonding Curve Price swap', () => {
                 tokenOut: setup.token2,
                 amountIn: amountInToken1,
                 minAmountOut: 1n, // Minimal amount to receive
+                debugGraph: "swap_1"
             });
 
             const senderToken2BalanceAfter = await getWalletBalance(senderToken2Wallet);
@@ -1440,7 +1468,7 @@ describe('Bonding Curve Price swap', () => {
             poolData = await (setup.pool as SBCtrPool).getPoolData();
 
             let reserveIn, reserveOut;
-            if (await addressIsBigger(setup.token1, setup.token2, setup.router.address)) {
+            if (await addressIsBigger(bc, setup.token1, setup.token2, setup.router.address)) {
                 reserveIn = poolData.rightReserve;
                 reserveOut = poolData.leftReserve;
             } else {
@@ -1794,6 +1822,7 @@ describe('Bonding Curve Price swap', () => {
                 router: setup.router,
                 mintAmount: toNano(100000000)
             });
+
             let pool = await createPool({
                 router: setup.router,
                 token1: setup.token2,

@@ -1,5 +1,5 @@
 
-() emit_log_simple(int event_id, slice data) impure inline {
+() emit_log_simple(int event_id, slice data) impure inline_ref {
     var msg = begin_cell()
         .store_uint(12, 4)
         .store_uint(1, 2)
@@ -14,8 +14,57 @@
     send_raw_message(msg, 0);
 }
 
+int get_pay_to_wallet_fee() {
+    return ctx.at(FWD_FEE) * 3 + storage_fee::router + gas::router::pay_to + gas::jetton_wallet::est_transfer;
+}
+
+() burn_fee(int fee0, int fee1) impure inline_ref {
+    slice hole_address = begin_cell()
+                            .store_uint(2, 2)
+                            .store_uint(0, 1)
+                            .store_int(0, 8)
+                            .store_uint(0, 256)
+                            .end_cell().begin_parse();
+    msgs::send_simple(
+        get_pay_to_wallet_fee(),
+        ctx.at(SENDER),
+        router::pay_to(
+            hole_address,
+            hole_address,
+            hole_address,
+            op::burn_fee_ok,
+            0,
+            null(),
+            fee0,
+            storage::token0_address,
+            fee1,
+            storage::token1_address
+        ),
+        NORMAL
+    );
+}
+
+() send_reward(int reward0, int reward1) impure inline_ref {
+    msgs::send_simple(
+        get_pay_to_wallet_fee(),
+        ctx.at(SENDER),
+        router::pay_to(
+            storage::creator_address,
+            storage::creator_address,
+            storage::creator_address,
+            op::reward_ok,
+            0,
+            null(),
+            reward0,
+            storage::token0_address,
+            reward1,
+            storage::token1_address
+        ),
+        NORMAL
+    );
+}
+
 const FeesSwapped = 0xfee53aed;
-const CrTenBurned = 0xc7b021ed;
 
 () handle_router_messages() impure inline {
     slice in_msg_body = ctx.at(BODY);
@@ -45,6 +94,7 @@ const CrTenBurned = 0xc7b021ed;
         cell refund_payload_cs = null(); 
         int ref_value = 0;
         slice ref_address = null(); 
+        int from_native = 0;
 
         try { ;; check call_payload body, refund to refund_address if fails
             slice call_payload = dex_payload~load_slice_ref(); 
@@ -65,6 +115,7 @@ const CrTenBurned = 0xc7b021ed;
                 & ref_address.address::check_workchain_nofail(params::workchain)
             );
 <% if (bondingCurve) {
+            print(`from_native = call_payload~load_bool();`);
             print(`router_settings = dex_payload~load_slice_ref();`);
 }%>
             call_payload.end_parse();
@@ -102,34 +153,50 @@ const CrTenBurned = 0xc7b021ed;
             throw_arg_if(op::swap_fee_out_of_bounds, 1, (ref_value > params::max_fee) | (ref_value < params::min_fee));
 
             ;; initialize variables
-            int out0 = 0; 
-            int out1 = 0; 
+            int out = 0;
+            int out0 = 0;
+            int out1 = 0;
             int protocol_fee_out0 = 0;
             int protocol_fee_out1 = 0;
             int ref_fee_out0 = 0; 
             int ref_fee_out1 = 0;
             ;; if no ref address - set fee value to 0
             ref_value = ref_address.preload_uint(2) == 0 ? 0 : ref_value;
-            
-            if amount0 { 
-                ;; swap token0 for token1
-                (out1, protocol_fee_out1, ref_fee_out1, protocol_fee_out0) = pool::get_swap_out(true, ref_value, amount0, storage::reserve0, storage::reserve1);
-                storage::reserve0 += (amount0 - protocol_fee_out0);
-                storage::reserve1 -= (out1 + protocol_fee_out1 + ref_fee_out1);
-                storage::collected_token0_protocol_fee += protocol_fee_out0;
-                storage::collected_token1_protocol_fee += protocol_fee_out1;
-            } else { 
-                ;; no need for elseif, see above
-                ;; swap token1 for token0
-                (out0, protocol_fee_out0, ref_fee_out0, protocol_fee_out1) = pool::get_swap_out(false, ref_value, amount1, storage::reserve1, storage::reserve0);
-                storage::reserve0 -= (out0 + protocol_fee_out0 + ref_fee_out0);
-                storage::reserve1 += (amount1 - protocol_fee_out1);
-                storage::collected_token0_protocol_fee += protocol_fee_out0;
-                storage::collected_token1_protocol_fee += protocol_fee_out1;
-            }
 
-            ;; one side will always be zero, so we can sum
-            int out = out0 + out1;
+<% if (bondingCurve) {
+            print(`if amount0 { `);
+            print(`(out1, protocol_fee_out0, ref_fee_out1, protocol_fee_out1) = pool::get_swap_out(from_native, ref_value, amount0, storage::reserve0, storage::reserve1);`);
+            print(`storage::reserve0 += amount0;`);
+            print(`storage::reserve1 -= (out1 + ref_fee_out1);`);
+            print(`} else { `);
+            print(`(out0, protocol_fee_out0, ref_fee_out0, protocol_fee_out1) = pool::get_swap_out(from_native, ref_value, amount1, storage::reserve1, storage::reserve0);`);
+            print(`storage::reserve0 -= (out0 + ref_fee_out0);`);
+            print(`storage::reserve1 += amount1; } `);
+            print(`if from_native { `);
+            print(`storage::reserve1 -= (protocol_fee_out0 + protocol_fee_out1);`);
+            print(`} else { `);
+            print(`storage::reserve0 -= (protocol_fee_out0 + protocol_fee_out1); } `);
+            print(`out = out0 + out1;`);
+}%>
+            if out == 0 {
+                if amount0 {
+                    ;; swap token0 for token1
+                    (out1, protocol_fee_out1, ref_fee_out1, protocol_fee_out0) = pool::get_swap_out(true, ref_value, amount0, storage::reserve0, storage::reserve1);
+                    storage::reserve0 += (amount0 - protocol_fee_out0);
+                    storage::reserve1 -= (out1 + protocol_fee_out1 + ref_fee_out1);
+                    storage::collected_token0_protocol_fee += protocol_fee_out0;
+                    storage::collected_token1_protocol_fee += protocol_fee_out1;
+                } else {
+                    ;; no need for elseif, see above
+                    ;; swap token1 for token0
+                    (out0, protocol_fee_out0, ref_fee_out0, protocol_fee_out1) = pool::get_swap_out(false, ref_value, amount1, storage::reserve1, storage::reserve0);
+                    storage::reserve0 -= (out0 + protocol_fee_out0 + ref_fee_out0);
+                    storage::reserve1 += (amount1 - protocol_fee_out1);
+                    storage::collected_token0_protocol_fee += protocol_fee_out0;
+                    storage::collected_token1_protocol_fee += protocol_fee_out1;
+                }
+                out = out0 + out1;
+            }
 
             ;; additional checks
             throw_arg_unless(op::swap_refund_tx_expired, 1, tx_deadline > now());
@@ -157,32 +224,32 @@ const CrTenBurned = 0xc7b021ed;
             }
 
             if ((protocol_fee_out0 > 0) & (protocol_fee_out1 > 0)) {
-                int feeIn = 0;
-                int feeOut = 0;
                 int amountIn = 0;
                 int amountOut = 0;
                 if amount0 > 0 {
                     amountIn = amount0;
                     amountOut = out1;
-                    feeIn = protocol_fee_out0;
-                    feeOut = protocol_fee_out1;
                 } else {
                     amountIn = amount1;
                     amountOut = out0;
-                    feeIn = protocol_fee_out1;
-                    feeOut = protocol_fee_out0;
                 }
                 emit_log_simple(FeesSwapped, begin_cell()
                                             .store_coins(amountIn)
                                             .store_coins(amountOut)
-                                            .end_cell()
-                                            .begin_parse());
-                emit_log_simple(CrTenBurned, begin_cell()
-                                            .store_coins(feeIn)
-                                            .store_coins(feeOut)
+                                            .store_coins(protocol_fee_out0)
+                                            .store_coins(protocol_fee_out1)
                                             .end_cell()
                                             .begin_parse());
             }
+
+<% if (bondingCurve) {
+        print(`int burn0 = from_native ? 0 : protocol_fee_out1;`);
+        print(`int burn1 = from_native ? protocol_fee_out1 : 0;`);
+        print(`burn_fee(burn0, burn1);`);
+        print(`int reward0 = from_native ? 0 : protocol_fee_out0;`);
+        print(`int reward1 = from_native ? protocol_fee_out0 : 0;`);
+        print(`send_reward(reward0, reward1);`);
+}%>
 
             msgs::send_simple(
                 0, 

@@ -23,6 +23,7 @@ global int storage::bc_swap_address_expiration;
     storage::exp_A_coeff = bc~load_uint(<%= calcExpACoeffSize %>);
     storage::exp_B_coeff = bc~load_uint(<%= calcExpBCoeffSize %>);
     storage::ct_for_curve_phase = bc~load_coins();
+    storage::creator_address = bc~load_msg_addr();
     storage::bc_swap_address = bc~load_msg_addr();
     storage::bc_swap_address_expiration = bc~load_uint(32);
     bc.end_parse();
@@ -54,6 +55,7 @@ global int storage::bc_swap_address_expiration;
             .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
             .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
             .store_coins(storage::ct_for_curve_phase)
+            .store_slice(storage::creator_address)
             .store_slice(storage::bc_swap_address)
             .store_uint(storage::bc_swap_address_expiration, 32)
             .end_cell())

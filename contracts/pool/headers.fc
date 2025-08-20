@@ -8,6 +8,7 @@ global int   storage::total_supply_lp;
 global slice storage::protocol_fee_address;
 global int   storage::lp_fee;
 global int   storage::protocol_fee;
+global slice storage::creator_address;
 
 ;; static data
 global cell  storage::_static;

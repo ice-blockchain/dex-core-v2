@@ -892,7 +892,7 @@ export const defautlCurveT = 80n;
 export const defaultACoeff = 1105000000000n;
 export const defaultBCoeff = 7056000000n;
 
-export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, expBCoeff?: bigint, ctokenToCurveT?: bigint, swapAddress?: Address }): Cell {
+export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, expBCoeff?: bigint, ctokenToCurveT?: bigint, creatorAddress?: Address, swapAddress?: Address }): Cell {
     let expACoeff = config.expACoeff ?? defaultACoeff;
     let expBCoeff = config.expBCoeff ?? defaultBCoeff;
     let ctokenToCurveT = config.ctokenToCurveT ?? defautlCurveT;
@@ -910,6 +910,7 @@ export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, e
             .storeUint(expACoeff, expACoeff.toString(2).length)
             .storeUint(expBCoeff, expBCoeff.toString(2).length)
             .storeCoins(ctokenToCurveT)
+            .storeAddress(config.creatorAddress)
             .storeAddress(config.swapAddress)
             .storeUint(0, 32)
             .endCell())
@@ -944,6 +945,7 @@ export function poolBciStorageParser(src: Cell) {
                 expACoeff: ds_p.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
                 expBCoeff: ds_p.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
                 ctokenToCurveT: ds_p.loadCoins(),
+                creatorAddress: ds_p.loadMaybeAddress(),
                 swapAddress: ds_p.loadMaybeAddress(),
                 swapAddressExiration: ds_p.loadUintBig(32),
             }
@@ -987,6 +989,7 @@ export class PoolBCI extends PoolBase {
             coefficientA: result.stack.readBigNumber(),
             coefficientB: result.stack.readBigNumber(),
             tokenCurveT: result.stack.readBigNumber(),
+            creatorAddress: result.stack.readAddressOpt(),
             swapAddress: result.stack.readAddressOpt(),
             swapAddressExiration: result.stack.readBigNumber(),
         };
@@ -1007,6 +1010,7 @@ export class PoolBCI extends PoolBase {
             coefficientA: defaultACoeff,
             coefficientB: defaultBCoeff,
             tokenCurveT: defautlCurveT,
+            creatorAddress: HOLE_ADDRESS as Address | null,
             swapAddress: HOLE_ADDRESS as Address | null,
             swapAddressExiration: 0n,
         }

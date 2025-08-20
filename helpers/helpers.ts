@@ -78,6 +78,7 @@ export function preprocBuildContractsLocal(opts: {
     defaultExpACoeff?: bigint,
     defaultExpBCoeff?: bigint,
     defaultCTokenForCurve?: bigint
+    defaultCreatorAddress?: string,
     defaultSwapAddress?: string,
     defaultSwapAddressExpirationTime?: bigint
 }): void {
@@ -95,6 +96,7 @@ export function preprocBuildContractsLocal(opts: {
             defaultExpBCoeff: opts.defaultExpBCoeff ?? undefined,
             calcExpBCoeffSize: opts.defaultExpBCoeff ? opts.defaultExpBCoeff.toString(2).length : undefined,
             defaultCTokenForCurve: opts.defaultCTokenForCurve ?? undefined,
+            defaultCreatorAddress: opts.defaultCreatorAddress ?? undefined,
             defaultSwapAddress: opts.defaultSwapAddress ?? undefined,
             defaultSwapAddressExpirationTime: opts.defaultSwapAddressExpirationTime ?? undefined,
             version: parseVersion(),
@@ -290,6 +292,7 @@ export const configParams = {
     defaultExpACoeff: resolveBigInt,
     defaultExpBCoeff: resolveBigInt,
     defaultCTokenForCurve: resolveBigInt,
+    defaultCreatorAddress: resolvers.address,
     defaultSwapAddress: resolvers.address,
     defaultSwapAddressExpirationTime: resolveBigInt,
 };
@@ -302,6 +305,7 @@ export const cliConfig = new CliConfig(configParams, {
     defaultExpACoeff: true,
     defaultExpBCoeff: true,
     defaultCTokenForCurve: true,
+    defaultCreatorAddress: true,
     defaultSwapAddress: true,
     defaultSwapAddressExpirationTime: true,
 });

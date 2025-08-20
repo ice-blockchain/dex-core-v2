@@ -137,7 +137,8 @@ export function swapPayload(opts: {
     deadline: number,
     customPayload?: Cell,
     refundPayload?: Cell,
-    refFee?: bigint
+    refFee?: bigint,
+    fromNative?: boolean
 }) {
     return beginCell()
         .storeUint(routerOpcodes.swap, 32)
@@ -154,6 +155,7 @@ export function swapPayload(opts: {
             .storeMaybeRef(opts.refundPayload)  // used if refund occurs
             .storeUint(opts.refFee ?? 10, 16)   // max is 100 (1%)
             .storeAddress(opts.refAddress || null)
+            .storeBit(opts.fromNative ?? false)
             .endCell())
         .endCell()
 }
@@ -170,7 +172,8 @@ export function crossSwapPayload(opts: {
     refundFwdGas?: bigint,
     deadline: number,
     refFee?: bigint,
-    refundPayload?: Cell
+    refundPayload?: Cell,
+    fromNative?: boolean
 }) {
     // use this payload in swapPayload() to chain swaps on the same router
     return beginCell()
@@ -188,6 +191,7 @@ export function crossSwapPayload(opts: {
             .storeMaybeRef(opts.refundPayload)
             .storeUint(opts.refFee ?? 10, 16)
             .storeAddress(opts.refAddress || null)
+            .storeBit(opts.fromNative ?? false)
             .endCell())
         .endCell()
 }

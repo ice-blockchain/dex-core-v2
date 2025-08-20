@@ -14,6 +14,7 @@ _ get_pool_data() method_id {
         storage::exp_A_coeff,
         storage::exp_B_coeff,
         storage::ct_for_curve_phase,
+        storage::creator_address,
         storage::bc_swap_address,
         storage::bc_swap_address_expiration
     );

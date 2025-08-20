@@ -29,6 +29,7 @@
             .store_uint(<%= defaultExpACoeff %>, <%= calcExpACoeffSize %>)
             .store_uint(<%= defaultExpBCoeff %>, <%= calcExpBCoeffSize %>)
             .store_coins(<%= defaultCTokenForCurve %>)
+            .store_slice(to_std_address(<%= defaultCreatorAddress %>))
             .store_slice(to_std_address(<%= defaultSwapAddress %>))
             .store_uint(0, 32)
             .end_cell())

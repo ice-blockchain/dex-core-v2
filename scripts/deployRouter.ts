@@ -3,7 +3,7 @@ import { Address, OpenedContract, toNano } from '@ton/core';
 import fs from 'fs';
 import { POOL_TYPES, cliConfig, configParams, getIdColor, preprocBuildContractsLocal } from '../helpers/helpers';
 import { CliConfig, buildLibFromCell, color, getLatestDeployer, isArgPresent, prettyFees, prettyState, waitConfirm, waitForDeploy } from '../libs';
-import { Router } from '../wrappers/Router';
+import { Router, RouterBCI } from '../wrappers/Router';
 
 function readLibHex(ctr: string) {
     return JSON.parse(fs.readFileSync(`build/lib.${ctr}.json`, 'utf8')).hex
@@ -46,6 +46,12 @@ export async function run(provider: NetworkProvider, args: string[]) {
     } else if (config.dexType == 'bonding_curve') {
         defaultSwapAddress = '0, 0'
     }
+
+    let defaultCreatorAddress = undefined;
+    if (config.defaultCreatorAddress) {
+        const address = config.defaultCreatorAddress;
+        defaultCreatorAddress = `${address.workChain}, 0x${address.hash.toString('hex')}`
+    }
     waitConfirm()
     preprocBuildContractsLocal({
         dexType: config.dexType,
@@ -55,8 +61,9 @@ export async function run(provider: NetworkProvider, args: string[]) {
         defaultExpACoeff: config.defaultExpACoeff,
         defaultExpBCoeff: config.defaultExpBCoeff,
         defaultCTokenForCurve: config.defaultCTokenForCurve,
+        defaultCreatorAddress: defaultCreatorAddress,
         defaultSwapAddress: defaultSwapAddress,
-        defaultSwapAddressExirationTime: 60000n,
+        defaultSwapAddressExpirationTime: 60000n,
     });
 
     const lpWalletCode = await compile("LPWallet")
@@ -176,9 +183,15 @@ export async function run(provider: NetworkProvider, args: string[]) {
     if (!onlyLibs) {
         color.log(` - <y>Deploying <b>Router (${config.dexType})<y>...`)
 
-        let router: OpenedContract<Router>
+        let routerClass: any;
+        if (config.dexType === "bonding_curve") {
+            routerClass = RouterBCI;
+        } else {
+            routerClass = Router;
+        }
+        let router: OpenedContract<Router> | OpenedContract<RouterBCI>;
         while (true) {
-            router = provider.open(Router.createFromConfig({
+            router = provider.open(routerClass.createFromConfig({
                 id: config.routerId,
                 isLocked: false,
                 adminAddress: adminAddress,

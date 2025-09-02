@@ -947,7 +947,7 @@ export function poolBciStorageParser(src: Cell) {
                 ctokenToCurveT: ds_p.loadCoins(),
                 creatorAddress: ds_p.loadMaybeAddress(),
                 swapAddress: ds_p.loadMaybeAddress(),
-                swapAddressExiration: ds_p.loadUintBig(32),
+                swapAddressExpiration: ds_p.loadUintBig(32),
             }
         })(),
         ...(() => {
@@ -991,7 +991,7 @@ export class PoolBCI extends PoolBase {
             tokenCurveT: result.stack.readBigNumber(),
             creatorAddress: result.stack.readAddressOpt(),
             swapAddress: result.stack.readAddressOpt(),
-            swapAddressExiration: result.stack.readBigNumber(),
+            swapAddressExpiration: result.stack.readBigNumber(),
         };
     }
 
@@ -1012,7 +1012,7 @@ export class PoolBCI extends PoolBase {
             tokenCurveT: defautlCurveT,
             creatorAddress: HOLE_ADDRESS as Address | null,
             swapAddress: HOLE_ADDRESS as Address | null,
-            swapAddressExiration: 0n,
+            swapAddressExpiration: 0n,
         }
         try {
             data = await this.getPoolData(provider)

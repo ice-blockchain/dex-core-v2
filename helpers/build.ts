@@ -21,7 +21,7 @@ import { defaultACoeff, defaultBCoeff, defautlCurveT } from "../wrappers/Pool"
             defaultCTokenForCurve: tp == "bonding_curve" ? defautlCurveT : undefined,
             defaultCreatorAddress: tp == "bonding_curve" ? "0, 0" : undefined,
             defaultSwapAddress: tp == "bonding_curve" ? "0, 0" : undefined,
-            defaultSwapAddressExpirationTime: tp == "bonding_curve" ? 60000n : undefined,
+            defaultSwapAddressExpirationTime: tp == "bonding_curve" ? 60n : undefined,
         };
         preprocBuildContractsLocal(ops);
 

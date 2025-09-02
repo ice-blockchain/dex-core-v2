@@ -1,19 +1,4 @@
 
-() emit_log_simple(int event_id, slice data) impure inline_ref {
-    var msg = begin_cell()
-        .store_uint(12, 4)
-        .store_uint(1, 2)
-        .store_uint(0, 64 + 32 + 2) ;; created_lt, created_at, init:Maybe, body:Either
-        .store_slice(begin_cell()
-            .store_uint(32, 9)
-            .store_uint(event_id, 32)
-            .store_slice(data)
-            .end_cell()
-            .begin_parse())
-        .end_cell();
-    send_raw_message(msg, 0);
-}
-
 int get_pay_to_wallet_fee() {
     return ctx.at(FWD_FEE) * 3 + storage_fee::router + gas::router::pay_to + gas::jetton_wallet::est_transfer;
 }
@@ -63,8 +48,6 @@ int get_pay_to_wallet_fee() {
         NORMAL
     );
 }
-
-const FeesSwapped = 0xfee53aed;
 
 () handle_router_messages() impure inline {
     slice in_msg_body = ctx.at(BODY);
@@ -221,25 +204,6 @@ const FeesSwapped = 0xfee53aed;
                         storage::token1_address), 
                     NORMAL
                 );
-            }
-
-            if ((protocol_fee_out0 > 0) & (protocol_fee_out1 > 0)) {
-                int amountIn = 0;
-                int amountOut = 0;
-                if amount0 > 0 {
-                    amountIn = amount0;
-                    amountOut = out1;
-                } else {
-                    amountIn = amount1;
-                    amountOut = out0;
-                }
-                emit_log_simple(FeesSwapped, begin_cell()
-                                            .store_coins(amountIn)
-                                            .store_coins(amountOut)
-                                            .store_coins(protocol_fee_out0)
-                                            .store_coins(protocol_fee_out1)
-                                            .end_cell()
-                                            .begin_parse());
             }
 
 <% if (bondingCurve) {

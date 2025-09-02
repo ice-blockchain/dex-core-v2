@@ -1,6 +1,7 @@
 import { compile } from '@ton/blueprint';
-import { Address, beginCell, Cell, toNano, fromNano } from '@ton/core';
-import { Blockchain, SandboxContract, SendMessageResult, TreasuryContract } from '@ton/sandbox';
+import { Address, beginCell, Cell, Dictionary, toNano, fromNano } from '@ton/core';
+import { Blockchain, defaultConfig, updateConfig, SandboxContract, SendMessageResult, TreasuryContract } from '@ton/sandbox';
+import { ConfigParam_config_gas_prices, GasLimitsPrices_gas_flat_pfx, GasLimitsPrices_gas_prices_ext, ConfigParam_config_fwd_prices, ConfigParam__18, MsgForwardPrices, StoragePrices } from '@ton/sandbox/dist/config/config.tlb-gen';
 import '@ton/test-utils';
 import 'dotenv/config';
 import { AddressMap, DEFAULT_JETTON_MINTER_CODE, DEFAULT_JETTON_WALLET_CODE, HOLE_ADDRESS, JettonContent, JettonMinterContract, JettonWalletContract, buildLibFromCell, buildLibs, divUp, getWalletBalance, jettonMinterStorageParser, jettonWalletStorageParser, maxBigint, metadataCell, onchainMetadata } from '../libs';
@@ -263,6 +264,66 @@ const calculateConstantProductCTOut = (
     return balanceOut * complementOfBase;
 }
 
+const ionMainnetConfig = (): Cell => {
+
+    const gasPricesExt: GasLimitsPrices_gas_prices_ext = {
+        kind: 'GasLimitsPrices_gas_prices_ext',
+        gas_price: 104857600n,
+        gas_limit: 4000000n,
+        special_gas_limit: 4000000n,
+        gas_credit: 40000n,
+        block_gas_limit: 40000000n,
+        freeze_due_limit: 400000000n,
+        delete_due_limit: 4000000000n
+    };
+
+    const gasPricesFlatPfx: GasLimitsPrices_gas_flat_pfx = {
+        kind: 'GasLimitsPrices_gas_flat_pfx',
+        flat_gas_limit: 400n,
+        flat_gas_price: 160000n,
+        other: gasPricesExt
+    };
+
+    const gasPriceParam: ConfigParam_config_gas_prices = {
+        kind: 'ConfigParam_config_gas_prices',
+        anon0: gasPricesFlatPfx
+    };
+
+    const msgFwdPrices: MsgForwardPrices = {
+        kind: 'MsgForwardPrices',
+        lump_price: 1600000n,
+        bit_price: 104857600n,
+        _cell_price: 10485760000n,
+        ihr_price_factor: 98304,
+        first_frac: 21845,
+        next_frac: 21845
+    };
+
+    const msgPricesParam: ConfigParam_config_fwd_prices = {
+        kind: 'ConfigParam_config_fwd_prices',
+        anon0: msgFwdPrices
+    };
+
+    const storagePrices: StoragePrices = {
+        kind: 'StoragePrices',
+        utime_since: 0,
+        bit_price_ps: 4n,
+        _cell_price_ps: 2000n,
+        mc_bit_price_ps: 4000n,
+        mc_cell_price_ps: 200000n
+    };
+
+    const storagePricesDict = Dictionary.empty<number, StoragePrices>();
+    storagePricesDict.set(0, storagePrices);
+
+    const storageParam: ConfigParam__18 = {
+        kind: 'ConfigParam__18',
+        anon0: storagePricesDict
+    };
+
+    return updateConfig(Cell.fromBase64(defaultConfig), gasPriceParam, msgPricesParam, storageParam);
+}
+
 async function addressIsBigger(bc: Blockchain, jetton1: SBCtrJettonMinter, jetton2: SBCtrJettonMinter, router: Address) {
     let routerWallet1 = await getWalletContract(bc, jetton1, router);
     let routerWallet2 = await getWalletContract(bc, jetton2, router);
@@ -313,6 +374,7 @@ describe('Bonding Curve Price swap', () => {
     };
     beforeAll(async () => {
         bc = await Blockchain.create();
+        bc.setConfig(ionMainnetConfig());
         setFromInitTimestamp(0);
 
         deployer = await bc.treasury('deployer');
@@ -910,11 +972,11 @@ describe('Bonding Curve Price swap', () => {
             let oldBobBalanceIn = await getWalletBalance(bobAddressIn);
 
             let msgResult = await walletIn.sendTransfer(sender.getSender(), {
-                value: params.gas ?? toNano(3),
+                value: params.gas ?? toNano(4),
                 jettonAmount: params.amountIn,
                 toAddress: router.address,
                 responseAddress: sender.address,
-                fwdAmount: params.fwdGas ?? toNano("2"),
+                fwdAmount: params.fwdGas ?? toNano(3),
                 fwdPayload: swapPayload({
                     otherTokenWallet: routerWalletOut.address,
                     receiver: sender.address,
@@ -962,25 +1024,11 @@ describe('Bonding Curve Price swap', () => {
             }
 
             let poolData = await pool.getPoolData();
-            const poolTx = msgResult.transactions.find(tx => {
-                const poolAddressHashBigInt = BigInt('0x' + pool.address.hash.toString('hex'));
-                return tx.address === poolAddressHashBigInt; // This is a correct BigInt comparison
-            });
             if (params.expectBounce || params.expectRefund) {
                 if (params.expectBounce) {
                     expectBounced(msgResult.events);
-                    if (poolTx) {
-                        expect(poolTx.externals.length).toEqual(0);
-                    }
                 } else {
                     expectNotBounced(msgResult.events);
-                    if (poolTx) {
-                        if (params.customPayload) {
-                            expect(poolTx.externals.length).toEqual(1);
-                        } else {
-                            expect(poolTx.externals.length).toEqual(0);
-                        }
-                    }
                 }
                 if (!params.customPayload) {
                     let balance = await getWalletBalance(walletIn);
@@ -1003,15 +1051,6 @@ describe('Bonding Curve Price swap', () => {
                 }
             } else {
                 expectNotBounced(msgResult.events);
-                if (poolTx) {
-                    const FeesSwapped = 0xfee53aed;
-                    const logMessages = poolTx.externals.filter(ext => {
-                        const bodySlice = ext.body.beginParse();
-                        const eventId = bodySlice.loadUint(32);
-                        return eventId === FeesSwapped;
-                    });
-                    expect(logMessages.length).toEqual(1);
-                }
                 let balance = await getWalletBalance(walletIn);
                 expect(balance).toEqual(oldBalanceIn - BigInt(params.amountIn));
                 balance = await getWalletBalance(bobAddressIn);
@@ -1354,6 +1393,7 @@ describe('Bonding Curve Price swap', () => {
 
     beforeEach(async () => {
         bc = await Blockchain.create();
+        bc.setConfig(ionMainnetConfig());
         bc.verbosity.print = true;
         bc.verbosity.debugLogs = true;
         bc.libs = myLibs;

@@ -22,3 +22,5 @@ contracts_build
 yarn.lock
 package-lock.json
 pnpm-lock.yaml
+
+commit.sh

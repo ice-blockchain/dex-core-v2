@@ -8,6 +8,7 @@
     slice token_wallet1 = null();
     slice refund_address = null();
     slice excesses_address = null();
+    slice call_payload = null();
     int tx_deadline = 0;
 
     try {
@@ -17,6 +18,7 @@
         refund_address = dex_payload~load_msg_addr();
         excesses_address = dex_payload~load_msg_addr();
         tx_deadline = dex_payload~load_time();
+        call_payload = dex_payload~load_slice_ref();
 
         throw_arg_unless(error::wrong_workchain, 1, 
             token_wallet1.address::check_workchain(params::workchain)
@@ -83,7 +85,13 @@
 <% if (bondingCurve) {
         print(`if transferred_op == op::swap { `);
         print(`_dex_payload = begin_cell()`);
-        print(`.store_slice(_dex_payload.begin_parse())`);
+        print(`.store_opcode(transferred_op)`);
+        print(`.store_slice(token_wallet1)`);
+        print(`.store_slice(refund_address)`);
+        print(`.store_slice(excesses_address)`);
+        print(`.store_time(tx_deadline)`);
+        print(`.store_ref(begin_cell()`);
+        print(`.store_slice(call_payload)`);
         print(`.store_ref(begin_cell()`);
         print(`.store_uint(storage::lp_fee, 16)`);
         print(`.store_uint(storage::protocol_fee, 16)`);
@@ -91,7 +99,7 @@
         print(`.store_uint(storage::bc_protocol_fee, 16)`);
         print(`.store_uint(storage::protocol_fee_pct, 16)`);
         print(`.store_coins(storage::base_usd_rate)`);
-        print(`.end_cell()).end_cell(); }`);
+        print(`.end_cell()).end_cell()).end_cell(); }`);
 } %>
 
         reserves::max_balance(storage_fee::router);

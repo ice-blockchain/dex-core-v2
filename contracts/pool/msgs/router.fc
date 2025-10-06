@@ -99,7 +99,7 @@ int get_pay_to_wallet_fee() {
             );
 <% if (bondingCurve) {
             print(`from_native = call_payload~load_bool();`);
-            print(`router_settings = dex_payload~load_slice_ref();`);
+            print(`router_settings = call_payload~load_slice_ref();`);
 }%>
             call_payload.end_parse();
             dex_payload.end_parse();
@@ -133,6 +133,9 @@ int get_pay_to_wallet_fee() {
         try {
             ;; directly throw if pool is locked
             throw_arg_if(op::swap_pool_locked, 1, storage::is_locked);
+        <% if (bondingCurve) {
+            print(`throw_arg_unless(op::swap_pool_uninitialized, 1, storage::is_initialized);`);
+        }%>
             throw_arg_if(op::swap_fee_out_of_bounds, 1, (ref_value > params::max_fee) | (ref_value < params::min_fee));
 
             ;; initialize variables

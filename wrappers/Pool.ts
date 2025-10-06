@@ -888,28 +888,20 @@ export class PoolStable extends PoolBase {
 
 }
 
-export const defautlCurveT = 80n;
-export const defaultACoeff = 1105000000000n;
-export const defaultBCoeff = 7056000000n;
-
-export function bciPoolConfigToCell(config: PoolConfig & { expACoeff?: bigint, expBCoeff?: bigint, ctokenToCurveT?: bigint, creatorAddress?: Address, swapAddress?: Address }): Cell {
-    let expACoeff = config.expACoeff ?? defaultACoeff;
-    let expBCoeff = config.expBCoeff ?? defaultBCoeff;
-    let ctokenToCurveT = config.ctokenToCurveT ?? defautlCurveT;
+export function bciPoolConfigToCell(config: PoolConfig & { creatorAddress?: Address, swapAddress?: Address }): Cell {
     return beginCell()
         .storeUint(1, 1)
         .storeRef(beginCell()
             .storeCoins(config.leftReserve)
             .storeCoins(config.rightReserve)
             .storeCoins(config.totalSupplyLP)
-            .storeCoins(config.collectedLeftJettonProtocolFees)
-            .storeCoins(config.collectedRightJettonProtocolFees)
             .storeAddress(config.protocolFeeAddress)
             .endCell())
         .storeRef(beginCell()
-            .storeUint(expACoeff, expACoeff.toString(2).length)
-            .storeUint(expBCoeff, expBCoeff.toString(2).length)
-            .storeCoins(ctokenToCurveT)
+            .storeUint(0, 1)
+            .storeCoins(0)
+            .storeCoins(0)
+            .storeCoins(0)
             .storeAddress(config.creatorAddress)
             .storeAddress(config.swapAddress)
             .storeUint(0, 32)
@@ -934,16 +926,15 @@ export function poolBciStorageParser(src: Cell) {
                 reserve0: ds_p.loadCoins(),
                 reserve1: ds_p.loadCoins(),
                 totalSupplyLp: ds_p.loadCoins(),
-                collectedToken0ProtocolFee: ds_p.loadCoins(),
-                collectedToken1ProtocolFee: ds_p.loadCoins(),
                 protocolFeeAddress: ds_p.loadMaybeAddress(),
             }
         })(),
         ...(() => {
             let ds_p = ds.loadRef().beginParse()
             return {
-                expACoeff: ds_p.loadUintBig(defaultACoeff.toString(2).length), // in tests only, it's dynamically
-                expBCoeff: ds_p.loadUintBig(defaultBCoeff.toString(2).length), // in tests only, it's dynamically
+                isInitialized: ds_p.loadBoolean(),
+                expACoeff: ds_p.loadCoins(),
+                expBCoeff: ds_p.loadCoins(),
                 ctokenToCurveT: ds_p.loadCoins(),
                 creatorAddress: ds_p.loadMaybeAddress(),
                 swapAddress: ds_p.loadMaybeAddress(),
@@ -984,8 +975,7 @@ export class PoolBCI extends PoolBase {
             leftJettonAddress: result.stack.readAddress(),
             rightJettonAddress: result.stack.readAddress(),
             protocolFeeAddress: result.stack.readAddressOpt(),
-            collectedLeftJettonProtocolFees: result.stack.readBigNumber(),
-            collectedRightJettonProtocolFees: result.stack.readBigNumber(),
+            isInitialized: result.stack.readBoolean(),
             coefficientA: result.stack.readBigNumber(),
             coefficientB: result.stack.readBigNumber(),
             tokenCurveT: result.stack.readBigNumber(),
@@ -1005,11 +995,10 @@ export class PoolBCI extends PoolBase {
             leftJettonAddress: HOLE_ADDRESS,
             rightJettonAddress: HOLE_ADDRESS,
             protocolFeeAddress: HOLE_ADDRESS as Address | null,
-            collectedLeftJettonProtocolFees: 0n,
-            collectedRightJettonProtocolFees: 0n,
-            coefficientA: defaultACoeff,
-            coefficientB: defaultBCoeff,
-            tokenCurveT: defautlCurveT,
+            isInitialized: false,
+            coefficientA: 0n,
+            coefficientB: 0n,
+            tokenCurveT: 0n,
             creatorAddress: HOLE_ADDRESS as Address | null,
             swapAddress: HOLE_ADDRESS as Address | null,
             swapAddressExpiration: 0n,

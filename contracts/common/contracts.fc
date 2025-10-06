@@ -72,35 +72,9 @@
     .end_cell();
 }
 
-(cell) anyone::getter_pool_data(
-    int _is_locked,
-    slice _router_address,
-    int _total_supply_lp,
-    int _left_reserve,
-    int _right_reserve,
-    slice _left_token_address,
-    slice _right_token_address,
-    int _lp_fee,
-    int _protocol_fee,
-    slice _protocol_fee_address,
-    int _collected_left_token_protocol_fees,
-    int _collected_right_token_protocol_fees
-) inline {
+(cell) anyone::getter_pool_data(cell data) inline {
     return begin_message(op::getter_pool_data)
-        .store_bool(_is_locked)
-        .store_coins(_left_reserve)
-        .store_coins(_right_reserve)
-        .store_slice(_left_token_address)
-        .store_slice(_right_token_address)
-        .store_ref(begin_cell()
-            .store_uint(_lp_fee, 16)
-            .store_uint(_protocol_fee, 16)
-            .store_slice(_router_address)
-            .store_slice(_protocol_fee_address)
-            .store_coins(_total_supply_lp)
-            .store_coins(_collected_left_token_protocol_fees)
-            .store_coins(_collected_right_token_protocol_fees)
-        .end_cell())
+        .store_slice(data.begin_parse())
     .end_cell();
 }
 

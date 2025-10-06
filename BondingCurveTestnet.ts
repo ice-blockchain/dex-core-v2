@@ -3,7 +3,7 @@ import { mnemonicToWalletKey } from '@ton/crypto';
 import { compile } from '@ton/blueprint';
 import { Sender, OpenedContract, beginCell, Builder, contractAddress } from '@ton/core';
 import { RouterBCI as Router, swapPayload, provideLpPayload } from './wrappers/Router';
-import { PoolBCI as Pool, defaultACoeff, defaultBCoeff, defautlCurveT } from './wrappers/Pool';
+import { PoolBCI as Pool } from './wrappers/Pool';
 import { DEFAULT_JETTON_MINTER_CODE, DEFAULT_JETTON_WALLET_CODE, buildLibs, Deployer, DeployerConfig, getWalletBalance, JettonMinterContract, JettonWalletContract, metadataCell, onchainMetadata } from './libs';
 import { preprocBuildContractsLocal } from './helpers/helpers';
 import 'dotenv/config';
@@ -124,9 +124,9 @@ function filterRouterData(routerData: any) {
     }, {});
 }
 
-function addresswh(address: Address) {
-    return `${address.workChain}, 0x${address.hash.toString('hex')}`;
-}
+const defautlCurveT = 80n;
+const defaultACoeff = 1105000000000n;
+const defaultBCoeff = 7056000000n;
 
 async function main() {
 
@@ -150,20 +150,11 @@ async function main() {
     console.log(`alice: ${alice.address}`);
     console.log(`bob: ${bob.address}`);
 
-    const creator = bob.address;
-    const swapAddress = alice.address;
-
     preprocBuildContractsLocal({
         dexType: "bonding_curve",
-        defaultIsLocked: 1,
+        defaultIsLocked: null,
         defaultLPFee: null,
-        defaultProtocolFee: null,
-        defaultExpACoeff: defaultACoeff,
-        defaultExpBCoeff: defaultBCoeff,
-        defaultCTokenForCurve: defautlCurveT,
-        defaultCreatorAddress: addresswh(creator),
-        defaultSwapAddress: addresswh(swapAddress),
-        defaultSwapAddressExpirationTime: 60n,
+        defaultProtocolFee: null
     });
 
     const libs = {
@@ -279,14 +270,6 @@ async function main() {
         });
         const pool = client.open(Pool.createFromAddress(poolAddress));
 
-        async function UpdatePoolStatus() {
-            await router.sendUpdatePoolStatus(deployer.sender, {
-                firstWalletAddress: routerWallet1.address,
-                secondWalletAddress: routerWallet2.address,
-            }, toNano(2));
-            await waitForNewTransaction(client, pool.address, "Update pool status");
-        }
-
         let poolData = null;
 
         if (!await client.isContractDeployed(pool.address)) {
@@ -297,8 +280,27 @@ async function main() {
             poolData = await pool.getPoolData();
         }
 
-        if (!poolData || poolData.isLocked) {
-            await UpdatePoolStatus();
+        if (!poolData || !poolData.isInitialized) {
+            await router.sendSetParams(deployer.sender, {
+                leftWalletAddress: routerWallet1.address,
+                rightWalletAddress: routerWallet2.address,
+                coeffA: defaultACoeff,
+                coeffB: defaultBCoeff,
+                tokenForCurve: defautlCurveT,
+                creatorAddress: bob.address,
+                swapAddress: alice.address,
+                swapAddressExpiration: 60n
+            }, toNano(2));
+            await waitForNewTransaction(client, pool.address, "Set pool params");
+            poolData = await pool.getPoolData();
+        }
+
+        if (poolData.isLocked) {
+            await router.sendUpdatePoolStatus(deployer.sender, {
+                firstWalletAddress: routerWallet1.address,
+                secondWalletAddress: routerWallet2.address,
+            }, toNano(2));
+            await waitForNewTransaction(client, pool.address, "Update pool status");
         }
 
         poolData = await pool.getPoolData();
@@ -361,6 +363,8 @@ async function main() {
             // wait until pool receives the message
             await waitForNewTransaction(client, pool.address, `Provide liquidity ${name2}`);
 
+            // wait pool to update its data
+            await new Promise(resolve => setTimeout(resolve, 2000));
             poolData = await pool.getPoolData();
             console.log(`pool data: ${JSON.stringify(poolData, null, 2)}`);
         }

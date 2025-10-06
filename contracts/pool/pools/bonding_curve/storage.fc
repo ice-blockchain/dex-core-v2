@@ -13,15 +13,14 @@ global int storage::bc_swap_address_expiration;
     storage::reserve0 = pd~load_coins();
     storage::reserve1 = pd~load_coins();
     storage::total_supply_lp = pd~load_coins();
-    storage::collected_token0_protocol_fee = pd~load_coins();
-    storage::collected_token1_protocol_fee = pd~load_coins();
     storage::protocol_fee_address = pd~load_msg_addr();
     pd.end_parse();
 
     cell bc_data = ds~load_ref();
     slice bc = bc_data.begin_parse();
-    storage::exp_A_coeff = bc~load_uint(<%= calcExpACoeffSize %>);
-    storage::exp_B_coeff = bc~load_uint(<%= calcExpBCoeffSize %>);
+    storage::is_initialized = bc~load_bool();
+    storage::exp_A_coeff = bc~load_coins();
+    storage::exp_B_coeff = bc~load_coins();
     storage::ct_for_curve_phase = bc~load_coins();
     storage::creator_address = bc~load_msg_addr();
     storage::bc_swap_address = bc~load_msg_addr();
@@ -47,13 +46,12 @@ global int storage::bc_swap_address_expiration;
             .store_coins(storage::reserve0)
             .store_coins(storage::reserve1)
             .store_coins(storage::total_supply_lp)
-            .store_coins(storage::collected_token0_protocol_fee)
-            .store_coins(storage::collected_token1_protocol_fee)
             .store_slice(storage::protocol_fee_address)
             .end_cell())
         .store_ref(begin_cell()
-            .store_uint(storage::exp_A_coeff, <%= calcExpACoeffSize %>)
-            .store_uint(storage::exp_B_coeff, <%= calcExpBCoeffSize %>)
+            .store_bool(storage::is_initialized)
+            .store_coins(storage::exp_A_coeff)
+            .store_coins(storage::exp_B_coeff)
             .store_coins(storage::ct_for_curve_phase)
             .store_slice(storage::creator_address)
             .store_slice(storage::bc_swap_address)

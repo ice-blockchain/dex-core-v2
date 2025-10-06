@@ -1,4 +1,5 @@
 ;; updated from swaps, providelp, burnlp
+global int   storage::is_initialized;
 global int   storage::is_locked;
 global int   storage::collected_token0_protocol_fee;
 global int   storage::collected_token1_protocol_fee;

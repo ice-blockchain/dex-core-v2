@@ -1,0 +1,13 @@
+(cell) pool::internal_set_params(slice _excesses_address, int coeff_a, int coeff_b, int token_for_curve, slice creator_address, slice swap_address, int swap_address_expiration) inline {
+    return begin_message(op::internal_set_params)
+        .store_slice(_excesses_address)
+        .store_ref(begin_cell()
+            .store_coins(coeff_a)
+            .store_coins(coeff_b)
+            .store_coins(token_for_curve)
+            .store_slice(creator_address)
+            .store_slice(swap_address)
+            .store_uint(swap_address_expiration, 32)
+            .end_cell())
+        .end_cell();
+}

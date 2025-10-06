@@ -752,12 +752,12 @@ export class RouterBCI extends RouterBase {
             value: value || DefaultValues.DEFAULT_MSG_VALUE,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginMessage(routerOpcodes.setBondingCurveFees)
-            .storeUint(opts.lpFee, 16)
-            .storeUint(opts.protocolFee, 16)
-            .storeUint(opts.bclpFee, 16)
-            .storeUint(opts.bcprotocolFee, 16)
-            .storeUint(opts.protocolFeePCT, 16)
-            .endCell(),
+                .storeUint(opts.lpFee, 16)
+                .storeUint(opts.protocolFee, 16)
+                .storeUint(opts.bclpFee, 16)
+                .storeUint(opts.bcprotocolFee, 16)
+                .storeUint(opts.protocolFeePCT, 16)
+                .endCell(),
         });
     }
 
@@ -768,8 +768,38 @@ export class RouterBCI extends RouterBase {
             value: value || DefaultValues.DEFAULT_MSG_VALUE,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginMessage(routerOpcodes.setBondingCurvePrice)
-            .storeCoins(opts.baseUSDRate)
-            .endCell(),
+                .storeCoins(opts.baseUSDRate)
+                .endCell(),
+        });
+    }
+
+    async sendSetParams(provider: ContractProvider, via: Sender, opts: {
+        coeffA: bigint;
+        coeffB: bigint;
+        tokenForCurve: bigint;
+        creatorAddress: Address;
+        swapAddress: Address;
+        swapAddressExpiration: bigint;
+        leftWalletAddress: Address;
+        rightWalletAddress: Address;
+        excessesRecipient?: Address;
+    }, value?: bigint) {
+        await provider.internal(via, {
+            value: value || DefaultValues.DEFAULT_MSG_VALUE,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginMessage(routerOpcodes.setParams)
+                .storeCoins(opts.coeffA)
+                .storeCoins(opts.coeffB)
+                .storeCoins(opts.tokenForCurve)
+                .storeAddress(opts.creatorAddress)
+                .storeAddress(opts.swapAddress)
+                .storeUint(opts.swapAddressExpiration, 32)
+                .storeRef(beginCell()
+                    .storeAddress(opts.leftWalletAddress)
+                    .storeAddress(opts.rightWalletAddress)
+                    .storeAddress(opts.excessesRecipient || null)
+                    .endCell())
+                .endCell(),
         });
     }
 

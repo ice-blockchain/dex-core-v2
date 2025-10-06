@@ -52,11 +52,31 @@ global slice router_settings;
 }
 
 (int) pool::get_lp_provide_init_out(int _left_amount, int _right_amount) inline {
-    if (storage::bc_swap_address_expiration == 0) {
-        storage::bc_swap_address_expiration = now() + <%= defaultSwapAddressExpirationTime %>;
+    if (storage::total_supply_lp == 0) {
+        storage::bc_swap_address_expiration += now();
     }
     int inv0 = _invariant(_left_amount, _right_amount);
     return math::fp::to(inv0);
+}
+
+int div_up(int a, int b) inline {
+    throw_if(math::error::zero_division, b == 0);
+    return a == 0 ? 0 : muldiv(muldiv(a, math::ONE_DEC, 1) + b - 1, 1, b);
+}
+
+int mul_up(int a, int b) inline {
+    if ((a == 0) | (b == 0)) { return 0; }
+    return muldiv(muldiv(a, b, 1) + math::ONE_DEC - 1, 1, math::ONE_DEC);
+}
+
+int calculate_fee(int amount, int balance, int inv0, int inv1) inline_ref {
+    int balance_ratio = div_up(inv1, inv0);
+    int ideal_balance = mul_up(balance, balance_ratio);
+    int diff = abs(balance + amount - ideal_balance);
+    if (diff == 0) { return 0; }
+    int discrepancy_ratio = muldiv(diff, math::ONE_DEC, ideal_balance);
+    int dynamic_fee_rate = muldiv(discrepancy_ratio, discrepancy_ratio, params::max_fee);
+    return muldiv(amount, dynamic_fee_rate, math::ONE_DEC);
 }
 
 (int, int, int) pool::get_lp_provide_out(int _left_amount, int _right_amount) impure inline {
@@ -74,24 +94,18 @@ global slice router_settings;
     int inv1 = _invariant(new_reserve0, new_reserve1);
     if inv1 <= inv0 { return (0, 0, 0); }
 
-    int ideal_balance0 = muldiv(storage::reserve0, inv1, inv0);
-    int diff0 = abs(new_reserve0 - ideal_balance0);
-    int protocol_fee0 = new_reserve0 > ideal_balance0
-        ? muldiv(diff0, storage::protocol_fee, params::fee_divider) : 0;
-    int lp_fee0 = muldiv(diff0, divc(storage::lp_fee, 2), params::fee_divider);
-    new_reserve0 -= (lp_fee0 + protocol_fee0);
-
-    int ideal_balance1 = muldiv(storage::reserve1, inv1, inv0);
-    int diff1 = abs(new_reserve1 - ideal_balance1);
-    int protocol_fee1 = new_reserve1 > ideal_balance1
-        ? muldiv(diff1, storage::protocol_fee, params::fee_divider) : 0;
-    int lp_fee1 = muldiv(diff1, divc(storage::lp_fee, 2), params::fee_divider);
-    new_reserve1 -= (lp_fee1 + protocol_fee1);
-
+    if (storage::ct_for_curve_phase == 0) {
+        if (_left_amount > 0) {
+            new_reserve0 -= calculate_fee(_left_amount, storage::reserve0, inv0, inv1);
+        }
+        if (_right_amount > 0) {
+            new_reserve1 -= calculate_fee(_right_amount, storage::reserve1, inv0, inv1);
+        }
+    }
     int inv2 = _invariant(new_reserve0, new_reserve1);
     if inv2 <= inv0 { return (0, 0, 0); }
 
-    return (muldiv((inv2 - inv0), storage::total_supply_lp, inv0), protocol_fee0, protocol_fee1);
+    return (muldiv((inv2 - inv0), storage::total_supply_lp, inv0), 0, 0);
 }
 
 (int, int) pool::get_lp_burn_out(int _lp_amount) impure inline {

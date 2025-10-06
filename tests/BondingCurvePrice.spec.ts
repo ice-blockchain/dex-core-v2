@@ -10,7 +10,7 @@ import { BracketKeysType, BracketType, StorageParser } from '../libs/src/graph';
 import { expectBounced, expectEqAddress, expectNotBounced, getWalletContract, SLIM_CONFIG_LEGACY } from '../libs/src/test-helpers';
 import { LPAccount, lpAccStorageParser } from '../wrappers/LPAccount';
 import { LPWallet, lpWalletStorageParser } from '../wrappers/LPWallet';
-import { PoolBCI as Pool, poolBciStorageParser, defaultACoeff, defaultBCoeff, defautlCurveT } from '../wrappers/Pool';
+import { PoolBCI as Pool, poolBciStorageParser } from '../wrappers/Pool';
 import { RouterBCI as Router, crossSwapPayload, provideLpPayload, routerStorageParserBCI as routerStorageParser, swapPayload } from '../wrappers/Router';
 import { Vault, vaultStorageParser } from '../wrappers/Vault';
 
@@ -189,6 +189,22 @@ type SetRouterPriceParams = {
     baseUSDRate: bigint;
 };
 
+type SetPoolParams = {
+    sender?: SBCtrTreasury,
+    router: SBCtrRouter,
+    token1: SBCtrJettonMinter,
+    token2: SBCtrJettonMinter,
+    debugGraph?: string,
+    expectBounce?: boolean,
+    gas?: bigint,
+    coeffA: bigint,
+    coeffB: bigint,
+    tokenForCurve: bigint,
+    creatorAddress: Address,
+    swapAddress: Address,
+    swapAddressExpiration: bigint,
+};
+
 type UpdatePStatusParams = {
     sender?: SBCtrTreasury,
     router: SBCtrRouter,
@@ -334,6 +350,9 @@ async function addressIsBigger(bc: Blockchain, jetton1: SBCtrJettonMinter, jetto
     return routerWallet1HashInt > routerWallet2HashInt;
 }
 
+const defautlCurveT = 80n;
+const defaultACoeff = 1105000000000n;
+const defaultBCoeff = 7056000000n;
 const defaultLPFee = 20;
 const defaultProtocolFee = 10;
 
@@ -344,6 +363,7 @@ describe('Bonding Curve Price swap', () => {
         setFees: (params: SetFeesParams) => Promise<void>,
         setRouterFeeParams: (params: SetRouterFeeParams) => Promise<void>,
         setRouterPriceParams: (params: SetRouterPriceParams) => Promise<void>,
+        setPoolParams: (params: SetPoolParams) => Promise<void>,
         updatePoolStatus: (params: UpdatePStatusParams) => Promise<void>,
         collectFees: (params: CollectFeesParams) => Promise<void>,
         crossRouterSwap: (params: CrossRouterSwapParams) => Promise<void>,
@@ -386,13 +406,7 @@ describe('Bonding Curve Price swap', () => {
             dexType: "bonding_curve",
             defaultIsLocked: 1,
             defaultLPFee: null,
-            defaultProtocolFee: null,
-            defaultExpACoeff: defaultACoeff,
-            defaultExpBCoeff: defaultBCoeff,
-            defaultCTokenForCurve: defautlCurveT,
-            defaultCreatorAddress: `${creator.workChain}, 0x${creator.hash.toString('hex')}`,
-            defaultSwapAddress: `${sender.workChain}, 0x${sender.hash.toString('hex')}`,
-            defaultSwapAddressExpirationTime: 100n,
+            defaultProtocolFee: null
         });
 
         const _code = {
@@ -526,6 +540,19 @@ describe('Bonding Curve Price swap', () => {
                     debugGraph: typeof params.debugGraph !== "undefined" ? params.debugGraph + "_unlock" : undefined,
                 });
             }
+
+            await setPoolParams({
+                router: router,
+                token1: params.token1,
+                token2: params.token2,
+                debugGraph: typeof params.debugGraph !== "undefined" ? params.debugGraph + "_params" : undefined,
+                coeffA: defaultACoeff,
+                coeffB: defaultBCoeff,
+                tokenForCurve: defautlCurveT,
+                creatorAddress: creator,
+                swapAddress: sender.address,
+                swapAddressExpiration: 60n,
+            });
 
             // first token
             let wallet1 = await getWalletContract(bc, params.token1, sender);
@@ -1237,10 +1264,6 @@ describe('Bonding Curve Price swap', () => {
                 let balance1 = await getWalletBalance(feeWallet1);
                 let balance2 = await getWalletBalance(feeWallet2);
                 expect(balance1 + balance2).toBeGreaterThan(oldBalance1 + oldBalance2);
-
-                let poolData = await pool.getPoolData();
-                expect(poolData.collectedLeftJettonProtocolFees).toEqual(0n);
-                expect(poolData.collectedRightJettonProtocolFees).toEqual(0n);
             }
 
         };
@@ -1350,6 +1373,57 @@ describe('Bonding Curve Price swap', () => {
                 expectNotBounced(msgResult.events);
                 let routerData = await router.getRouterData();
                 expect(JSON.stringify(routerData)).not.toBe(JSON.stringify(oldRouterData));
+            }
+        };
+
+        setPoolParams = async (params: SetPoolParams) => {
+            let router = params.router;
+            let sender = params.sender ?? deployer;
+            let routerWallet1 = await getWalletContract(bc, params.token1, router.address);
+            let routerWallet2 = await getWalletContract(bc, params.token2, router.address);
+
+            let pool = bc.openContract(Pool.createFromAddress(await router.getPoolAddress({
+                firstWalletAddress: routerWallet1.address,
+                secondWalletAddress: routerWallet2.address
+            })));
+
+            let oldPoolData = await pool.getPoolDataNoFail();
+            expect(oldPoolData.isInitialized).toEqual(false);
+
+            let msgResult = await router.sendSetParams(sender.getSender(), {
+                leftWalletAddress: routerWallet1.address,
+                rightWalletAddress: routerWallet2.address,
+                coeffA: params.coeffA,
+                coeffB: params.coeffB,
+                tokenForCurve: params.tokenForCurve,
+                creatorAddress: params.creatorAddress,
+                swapAddress: params.swapAddress,
+                swapAddressExpiration: params.swapAddressExpiration
+            }, params.gas ?? toNano(2));
+            if (params.debugGraph) {
+                createMdGraphWithPath({
+                    msgResult: msgResult,
+                    storageMap: storageMap,
+                    addressMap: addressMap,
+                    bracketMap: bracketMap,
+                    output: params.debugGraph
+                });
+            }
+            if (params.expectBounce) {
+                expectBounced(msgResult.events);
+                let poolData = await pool.getPoolDataNoFail();
+                expect(JSON.stringify(poolData)).toEqual(JSON.stringify(oldPoolData));
+            } else {
+                expectNotBounced(msgResult.events);
+                let poolData = await pool.getPoolData();
+                expect(JSON.stringify(poolData)).not.toBe(JSON.stringify(oldPoolData));
+                expect(poolData.isInitialized).toEqual(true);
+                expect(poolData.coefficientA).toEqual(params.coeffA);
+                expect(poolData.coefficientB).toEqual(params.coeffB);
+                expect(poolData.tokenCurveT).toEqual(params.tokenForCurve);
+                expect(JSON.stringify(poolData.swapAddress)).toEqual(JSON.stringify(params.swapAddress));
+                expect(JSON.stringify(poolData.creatorAddress)).toEqual(JSON.stringify(params.creatorAddress));
+                expect(poolData.swapAddressExpiration).toEqual(params.swapAddressExpiration);
             }
         };
 
@@ -1591,7 +1665,7 @@ describe('Bonding Curve Price swap', () => {
                 router: setup.router,
                 token1: setup.token1,
                 token2: setup.token2,
-                amount1: toNano(100),
+                amount1: toNano(1),
                 amount2: toNano(200),
             });
         });

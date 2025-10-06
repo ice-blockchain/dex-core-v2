@@ -1,0 +1,29 @@
+;; messages from admin
+
+(int) handle_ext_router_messages() impure inline {
+    slice in_msg_body = ctx.at(BODY);
+
+    if ctx.at(OPCODE) == op::internal_set_params {
+        slice resp = in_msg_body~load_msg_addr();
+
+        ;; don't allow second call
+        if (~ storage::is_initialized) {
+            slice pool_info = in_msg_body~load_slice_ref();
+            storage::exp_A_coeff = pool_info~load_coins();
+            storage::exp_B_coeff = pool_info~load_coins();
+            storage::ct_for_curve_phase = pool_info~load_coins();
+            storage::creator_address = pool_info~load_msg_addr();
+            storage::bc_swap_address = pool_info~load_msg_addr();
+            storage::bc_swap_address_expiration = pool_info~load_uint(32);
+            storage::is_initialized = true;
+            storage::save();
+        }
+
+        reserves::max_balance(storage_fee::pool);
+        utils::send_excesses(0, resp, QCARRY_ALL_BALANCE);
+
+        return (true);
+    }
+
+    return (false);
+}

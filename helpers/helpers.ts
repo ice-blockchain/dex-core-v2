@@ -75,12 +75,6 @@ export function preprocBuildContractsLocal(opts: {
     defaultLPFee: Number | null,
     defaultProtocolFee: Number | null,
     autocleanup?: boolean,
-    defaultExpACoeff?: bigint,
-    defaultExpBCoeff?: bigint,
-    defaultCTokenForCurve?: bigint
-    defaultCreatorAddress?: string,
-    defaultSwapAddress?: string,
-    defaultSwapAddressExpirationTime?: bigint
 }): void {
     process.env.DEX_TYPE = opts.dexType
     preprocBuildContracts({
@@ -91,14 +85,6 @@ export function preprocBuildContractsLocal(opts: {
             defaultIsLocked: opts.defaultIsLocked == null ? 0 : 1,
             defaultLPFee: opts.defaultLPFee == null ? 20 : opts.defaultLPFee,
             defaultProtocolFee: opts.defaultProtocolFee == null ? 10 : opts.defaultProtocolFee,
-            defaultExpACoeff: opts.defaultExpACoeff ?? undefined,
-            calcExpACoeffSize: opts.defaultExpACoeff ? opts.defaultExpACoeff.toString(2).length : undefined,
-            defaultExpBCoeff: opts.defaultExpBCoeff ?? undefined,
-            calcExpBCoeffSize: opts.defaultExpBCoeff ? opts.defaultExpBCoeff.toString(2).length : undefined,
-            defaultCTokenForCurve: opts.defaultCTokenForCurve ?? undefined,
-            defaultCreatorAddress: opts.defaultCreatorAddress ?? undefined,
-            defaultSwapAddress: opts.defaultSwapAddress ?? undefined,
-            defaultSwapAddressExpirationTime: opts.defaultSwapAddressExpirationTime ?? undefined,
             version: parseVersion(),
             renderRouterAdminExtCalls: fs.existsSync(`contracts/router/pools/${opts.dexType}/ext_admin.fc`),
             renderPoolExtRouterCalls: fs.existsSync(`contracts/pool/pools/${opts.dexType}/ext_router.fc`),
@@ -289,12 +275,6 @@ export const configParams = {
     defaultIsLocked: resolvers.number,
     defaultLPFee: resolveFeeBps,
     defaultProtocolFee: resolveFeeBps,
-    defaultExpACoeff: resolveBigInt,
-    defaultExpBCoeff: resolveBigInt,
-    defaultCTokenForCurve: resolveBigInt,
-    defaultCreatorAddress: resolvers.address,
-    defaultSwapAddress: resolvers.address,
-    defaultSwapAddressExpirationTime: resolveBigInt,
 };
 
 export const cliConfig = new CliConfig(configParams, {
@@ -302,10 +282,4 @@ export const cliConfig = new CliConfig(configParams, {
     defaultLPFee: true,
     defaultProtocolFee: true,
     defaultIsLocked: true,
-    defaultExpACoeff: true,
-    defaultExpBCoeff: true,
-    defaultCTokenForCurve: true,
-    defaultCreatorAddress: true,
-    defaultSwapAddress: true,
-    defaultSwapAddressExpirationTime: true,
 });

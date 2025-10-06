@@ -4,9 +4,9 @@ const ONE_GRAM = 1000000000;
 const error::df_zero = 5104;
 const error::log_domain_error = 5105;
 
-int _invariant(int _left_balance, int _right_balance) impure inline {
-    _left_balance = _left_balance.math::fp::from();
-    _right_balance = _right_balance.math::fp::from();
+int _invariant(int _left_balance, int _right_balance) {
+    _left_balance = muldiv(_left_balance, ONE_GRAM, 1);
+    _right_balance = muldiv(_right_balance, ONE_GRAM, 1);
     return math::fp::mul(_left_balance, _right_balance);
 }
 
@@ -57,9 +57,9 @@ int calc_out_given_in(int _balance_in, int _amount_in, int _balance_out, int bas
         }
 
         ;; add decimals NOTE _balance_out and _amount_in are in GRAMS
-        _balance_out = _balance_out * ONE_GRAM;
-        _amount_in = _amount_in * ONE_GRAM;
-        int ct_for_curve_phase = storage::ct_for_curve_phase * ONE_GRAM;
+        _balance_out = muldiv(_balance_out, ONE_GRAM, 1);
+        _amount_in = muldiv(_amount_in, ONE_GRAM, 1);
+        int ct_for_curve_phase = muldiv(storage::ct_for_curve_phase, ONE_GRAM, 1);
 
         int base_out = _get_current_bonding_curve_price(_amount_in, _balance_out, base_usd_rate);
         if (ct_for_curve_phase >= _balance_out - base_out) {
